@@ -1,0 +1,7 @@
+project_id = "vwipzzvyziqwtfwivhns"
+
+[functions.books]
+verify_jwt = false
+
+[functions.library]
+verify_jwt = true
