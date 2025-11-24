@@ -1,5 +1,7 @@
 # Bem-vindo ao projeto Eclipse Reads
 
+![CI status](https://github.com/Jamilinha29/Eclipse-Reads/actions/workflows/ci.yml/badge.svg)
+
 ## Informações do Projeto
 
 Repositório do frontend do Eclipse Reads.

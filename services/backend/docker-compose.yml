@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  books-api:
+    build:
+      context: ./books-api
+    env_file:
+      - ./envs/books-api.env
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  auth-proxy:
+    build:
+      context: ./auth-proxy
+    env_file:
+      - ./envs/auth-proxy.env
+    ports:
+      - "4100:4100"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4100/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  library-service:
+    build:
+      context: ./library-service
+    env_file:
+      - ./envs/library-service.env
+    ports:
+      - "4200:4200"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# opcional: frontend container (se quiser servir via nginx)
+# frontend:
+#   build:
+#     context: ../../frontend-root
+#     dockerfile: Dockerfile.frontend
+#   ports:
+#     - "3000:80"
+#   depends_on:
+#     - books-api
+#     - auth-proxy

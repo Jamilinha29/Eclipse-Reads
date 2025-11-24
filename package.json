@@ -1,5 +1,12 @@
 {
   "dependencies": {
-    "@supabase/supabase-js": "^2.84.0"
+    "@supabase/supabase-js": "^2.84.0",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/morgan": "^1.9.10"
   }
 }
