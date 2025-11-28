@@ -7,6 +7,8 @@ import path from "path";
 // Carrega as variáveis de ambiente do arquivo library-service.env
 dotenv.config({ path: path.join(process.cwd(), '../envs/library-service.env') });
 
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -73,6 +75,8 @@ app.get("/library", async (req: Request, res: Response) => {
 });
 
 const PORT = Number(process.env.PORT ?? 4200);
-app.listen(PORT, () => console.log(`library-service listening on ${PORT}`));
+if (NODE_ENV !== "test") {
+  app.listen(PORT, () => console.log(`library-service listening on ${PORT}`));
+}
 
 export default app;

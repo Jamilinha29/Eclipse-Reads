@@ -7,6 +7,8 @@ import path from "path";
 // Carrega as variáveis de ambiente do arquivo auth-proxy.env
 dotenv.config({ path: path.join(process.cwd(), '../envs/auth-proxy.env') });
 
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -47,6 +49,9 @@ app.get("/validate", async (req: Request, res: Response) => {
 });
 
 const PORT = Number(process.env.PORT ?? 4100);
-app.listen(PORT, () => console.log(`auth-proxy listening on ${PORT}`));
+
+if (NODE_ENV !== "test") {
+  app.listen(PORT, () => console.log(`auth-proxy listening on ${PORT}`));
+}
 
 export default app;
