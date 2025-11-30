@@ -125,10 +125,12 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-app.listen(PORT, () => {
-  console.log(`📚 books-api running on port ${PORT}`);
-  console.log(`🌍 Environment: ${NODE_ENV}`);
-  console.log(`🚀 Health check: http://localhost:${PORT}/health`);
-});
+if (NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log(`📚 books-api running on port ${PORT}`);
+    console.log(`🌍 Environment: ${NODE_ENV}`);
+    console.log(`🚀 Health check: http://localhost:${PORT}/health`);
+  });
+}
 
 export default app;

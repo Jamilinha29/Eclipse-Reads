@@ -1,0 +1,173 @@
+Requisitos do App de Eclipse Reads
+1️⃣ Funcionalidades Essenciais (MVP – Lançamento Inicial)
+🔑 Autenticação
+- Login e cadastro por e-mail/senha
+- Login via Google (Google Sign-In API
+- Recuperação de senha por e-mail
+- Confirmação de conta via link no e-mail
+
+🏠 Página Inicial
+- Lista de livros mais lidos (diário, semanal, mensal)
+- “Blackbox” de livros em cards verticais e carrossel horizontal
+- Pesquisa de livros (por título, autor, gênero)
+📚 Biblioteca
+- Visualização de todos os livros disponíveis
+- Filtros por categoria, formato e status
+- Adição de livros à biblioteca pessoal
+📖 Leitor de Livros
+- Suporte a múltiplos formatos (EPUB, PDF inicialmente)
+- Ajuste de fonte, tamanho e cor de fundo (modo claro/escuro/sépia)
+- Marcadores de páginas
+- Continuação automática de onde parou
+- Suporte a leitura offline (download do livro)
+👤 Perfil do Usuário
+- Foto e nome de usuário
+- Lista de livros “Lidos”, “Lendo” e “Quero Ler”
+- Estatísticas básicas de leitura (tempo total, páginas lidas)
+2️⃣ Funcionalidades Avançadas (Fase 2 – Após MVP)
+📢 Rede Social
+- Seguir outros leitores
+- Sistema de comentários e resenhas
+- Avaliação com estrelas
+- Feed de atividades de amigos
+💾 Sincronização e Backup
+- Sincronizar biblioteca e progresso na nuvem (Supabase Firestore ou Realtime Database)
+- Login em vários dispositivos mantendo progresso
+🤖 Recomendações Inteligentes
+- Sugestões baseadas no histórico do usuário
+- Lista personalizada por gênero e autor
+
+Requisitos Adicionais – Mobile N2
+Projeto do app móvel:
+ Migração do MVP para Arquitetura 
+Moderna
+1. Objetivo
+Migrar o aplicativo protótipo (MVP)  para uma arquitetura orientada a 
+componentes e padrões atuais, melhorando manutenção, testabilidade, 
+resiliência e eficiência energética. 
+O novo design adotará MVVM  com V iewModels, persistência  local com 
+Room, comunicação  com servidor via API REST , gestão de trabalho em 
+background  com W orkManager , uso de corrotinas para concorrência segura 
+e estratégias de detecção/recuperação de conectividade.
+resumo dos principais requisitos funcionais
+●Introduzir ViewModels  para todas  as telas, isolando lógica de 
+apresentação e expondo estado via LiveData/StateFlow .
+●Implementar cliente de rede  resiliente (ex.: Retrofit + OkHttp)
+○timeouts, retry/backof f e cache; suportar fallback entre 
+interfaces  (Wi-Fi → móvel → modo offline).
+●Sincronizar dados com servidor REST
+○operações CRUD e sincronização.
+●Persistir dados localmente com Room
+○permitir  modo offline  completo e envio/recepção de dados 
+quando houver conectividade e consentimento do usuário.
+●Executar tarefas de sincronização e manutenção em background via 
+WorkManager , respeitando restrições (networkT ype, charging, 
+batteryNotLow).
+●Usar Kotlin Coroutines  (scoped com viewModelScope, lifecycleScope, 
+workerScope) para concorrência, cancelamento e composição de 
+fluxos assíncronos.
+●Garantir consentimento do usuário para upload de dados e oferecer 
+controles de privacidade explícitos (opt-in/opt-out).
+●Medir e reduzir memory leaks
+2. Arquitetura (visão de alto nível)
+●Presentation Layer:  Activities/Fragments + Jetpack Compose (ou 
+outro) para renderizar UI; observar V iewModels.
+●ViewModel Layer:  Estado da UI, validação e orquestração de 
+chamadas ao Repository
+●Domain/Repository Layer:  Repositórios que abstraem fontes de 
+dados (Network, Local). Aplicam políticas de cache, merges e 
+regras de negócio.
+●Data Layer:
+○Network:  Retrofit/OkHttp + interceptors (autenticação, 
+logging, retry). TLS obrigatório.
+○Local:  Room + DAOs; entidades versionadas e migrações.
+●Background & Scheduling:  WorkManager para jobs 
+persistentes; W orkers implementados como CoroutineW orker .
+●Infra & Aux (opcional):   invejação de dependencias a Hilt, 
+logging estruturado, Crashlytics para produção, monitoring/metrics 
+(ex.: Firebase Performance ou alternativa gratuita), LeakCanary 
+em dev .
+o monstro precisa estar completo
+requisitos técnicos 
+●conectividade e resiliência
+○Detectar estado de rede com ConnectivityManager e 
+NetworkCallback
+○Estratégia de fallback : preferir Wi-Fi; se indisponível usar 
+móvel; se nenhuma, operar em modo of fline.
+○Enfileirar operações de escrita quando of fline; W orkManager 
+tenta envio conforme condições.
+○[Desejável] Expor na UI indicador de conectividade, última 
+sincronização e estado das filas.
+●Sincronização e políticas de dados
+○Sincronização incremental  (apenas deltas ou registros 
+alterados)
+○[Desejável] Conflitos resolvidos pela política configurável (server 
+wins / client wins / manual merge via UI).
+○[Desejável]  Respeitar limites de taxa (rate limiting) e usar backof f 
+exponencial em retries.
+●Energia e performance
+○Evitar wake locks manuais
+○preferir WorkManager com restrições e setExpedited() 
+somente para casos urgentes.
+○[Boas práticas] Reduzir requisições desnecessárias com 
+agregação e debounce
+○[Boas práticas] Paginação (Paging 3) para listas longas; 
+carregamento lazy de imagens via Glide/Coil.
+●Segurança e privacidade
+○Controle de acesso, login (autenticação/autorização) 
+encriptação e token
+○Implementar consentimento explícito para 
+coleta/sincronização e UI para revogação.
+○[Desejável] Todos os requests via HTTPS/TLS; validar 
+certificados (Network Security Config)
+○[Desejável] Armazenar credenciais com Android Keystore; 
+tokens curtos + refresh token seguro
+○[Desejável]  Minimizar dados sensíveis armazenados 
+localmente; quando necessário, usar criptografia 
+(EncryptedSharedPreferences / SQLCipher).
+●Gestão do ciclo de vida e memory leaks
+○ViewModels sem referência a Context/UI
+○Usar lifecycle-aware components e cancelar corrotinas via 
+scopes apropriados
+○Integrar LeakCanary em builds de desenvolvimento para 
+detectar vazamentos.
+●Testes e qualidade
+○Testes para ViewModels e Repositories (mock de 
+network/dao) para garantir o funcionamento básico.
+●Observabilidade (recomendável)
+○Integrar Crashlytics (erros), monitoring de performance e 
+logs estruturados
+○análise de desempenho  (tempo de startup, taxa de 
+sucesso de sync, filas pendentes, uso de bateria por feature) 
+e telemetria básica (capturar esses logs do uso e enviar pro 
+servidor)
+Entregáveis e critérios de aceitação
+●Repositório Git com todo o código, organização da arquitetura. 
+Desejável revisão de PR.
+●Código reestruturado com MVVM e DI
+○[a implementação correta da arquitetura é um dos 
+pontos-chave da entrega]
+●Documentação : README com fluxos, diagramas, políticas de 
+sincronização e instruções de build/deploy , etc
+●Métricas exibidas (logs/monitoring) dos testes locais e do uso do app 
+por parte da equipe 
+○desejável integração com Crashlytics.
+○Documentar vazamentos detectados por LeakCanary em builds / 
+uso do app
+●Apresentação do app:
+○funcionamento e jornada do usuário
+○explicação da arquitetura implementada
+○apresentação da análise de métricas
+■devido a dificuldades com uma análise em tempo real, 
+métricas de desempenho, rede e memória podem ser 
+apresentadas por vídeo. O grupo pode gravar os testes e 
+mostrar a reprodução no dia da apresentação
+●Contingências (ou não vou conseguir fazer tudo)
+○faça o que der , o mais longe que conseguir (o óbvio precisa ser dito)
+○feito é melhor que perfeito. Não vou cobrar dívida técnica kkk
+○ dito isso, “feito” só salva até certo ponto: Garanta os 
+incontornáveis: completar a migração pro modelo mvvm, 
+implementando todos os componentes da arquitetura no melhor 
+que der , mesmo que simples/basicão
+deixemos o perfeito pro android Cell
+
