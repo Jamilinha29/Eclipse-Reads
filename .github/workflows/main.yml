@@ -1,37 +1,116 @@
-name: Main CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   pull_request:
-    branches: [ main ]
+    branches: ["main"]
 
 jobs:
-  test-and-build:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      node-version: ${{ steps.node_version.outputs.node }}
+    steps:
+      - id: node_version
+        run: echo "::set-output name=node::18"
+
+  # ================================
+  # INSTALL & TEST FRONTEND
+  # ================================
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
 
-      - name: Install root dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
 
-      - name: Run unit tests (root)
-        run: npm test
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm test --if-present
 
       - name: Build frontend
-        working-directory: frontend
         run: |
-          npm ci
+          cd frontend
           npm run build
 
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+  # ================================
+  # BACKEND MICROSERVICES TESTS
+  # ================================
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [books-api, auth-proxy, library-service]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          name: frontend-dist-${{ github.sha }}
-          path: frontend/dist
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          cd services/backend/${{ matrix.service }}
+          npm ci
+
+      - name: TypeScript check
+        run: |
+          cd services/backend/${{ matrix.service }}
+          npm run build
+
+  # ================================
+  # DOCKER BUILD (CI)
+  # ================================  
+  docker:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Books API
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/books-api:latest ./services/backend/books-api
+          docker push ghcr.io/${{ github.repository_owner }}/books-api:latest
+
+      - name: Build & Push Auth Proxy
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/auth-proxy:latest ./services/backend/auth-proxy
+          docker push ghcr.io/${{ github.repository_owner }}/auth-proxy:latest
+
+      - name: Build & Push Library Service
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/library-service:latest ./services/backend/library-service
+          docker push ghcr.io/${{ github.repository_owner }}/library-service:latest
+
+  # ================================
+  # DEPLOY TO VERCEL (FRONTEND)
+  # ================================
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: docker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
