@@ -72,7 +72,7 @@ jobs:
 
   # ================================
   # DOCKER BUILD (CI)
-  # ================================  
+  # ================================
   docker:
     runs-on: ubuntu-latest
     needs: [frontend, backend]
@@ -85,22 +85,28 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.CR_PAT }}
 
       - name: Build & Push Books API
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/books-api:latest ./services/backend/books-api
-          docker push ghcr.io/${{ github.repository_owner }}/books-api:latest
+          IMAGE="ghcr.io/${{ github.repository_owner }}/books-api:latest"
+          IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
+          docker build -t $IMAGE_LOWER ./services/backend/books-api
+          docker push $IMAGE_LOWER
 
       - name: Build & Push Auth Proxy
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/auth-proxy:latest ./services/backend/auth-proxy
-          docker push ghcr.io/${{ github.repository_owner }}/auth-proxy:latest
+          IMAGE="ghcr.io/${{ github.repository_owner }}/auth-proxy:latest"
+          IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
+          docker build -t $IMAGE_LOWER ./services/backend/auth-proxy
+          docker push $IMAGE_LOWER
 
       - name: Build & Push Library Service
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/library-service:latest ./services/backend/library-service
-          docker push ghcr.io/${{ github.repository_owner }}/library-service:latest
+          IMAGE="ghcr.io/${{ github.repository_owner }}/library-service:latest"
+          IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
+          docker build -t $IMAGE_LOWER ./services/backend/library-service
+          docker push $IMAGE_LOWER
 
   # ================================
   # DEPLOY TO VERCEL (FRONTEND)
