@@ -220,7 +220,7 @@ const Profile = () => {
 
     const { data, error } = await supabase
       .from("reading_goals")
-      .insert({
+      .upsert({
         user_id: userId,
         title: newGoalTitle,
         target_books: parseInt(newGoalTarget),

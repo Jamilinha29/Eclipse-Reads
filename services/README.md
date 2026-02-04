@@ -275,7 +275,3 @@ docker-compose down -v
 - [Documentação do Supabase](https://supabase.com/docs)
 - [Express.js Guide](https://expressjs.com/en/guide/routing.html)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
-
----
-
-**Desenvolvido para Eclipse Reads** 🌙📚

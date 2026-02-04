@@ -59,7 +59,7 @@ const Settings = () => {
         })
         .eq("user_id", userId);
     } else {
-      await supabase.from("user_settings").insert({
+      await supabase.from("user_settings").upsert({
         user_id: userId,
         theme,
         sound_enabled: soundEnabled,
