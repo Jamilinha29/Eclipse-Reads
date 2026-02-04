@@ -136,7 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         const { error } = await supabase
           .from("profiles")
-          .insert({
+          .upsert({
             user_id: userId,
             username,
             avatar_image: avatarImage,
