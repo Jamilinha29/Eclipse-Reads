@@ -34,12 +34,36 @@ git clone <SUA_URL_GIT>
 # Passo 2: Navegue até o diretório do projeto.
 cd <NOME_DO_SEU_PROJETO>
 
-# Passo 3: Instale as dependências necessárias.
+# Passo 3: Instale dependências do root (API, testes).
 npm install
 
-# Passo 4: Inicie o servidor de desenvolvimento.
+# Passo 4: Instale dependências do frontend (Vite/React).
+cd frontend && npm install
+```
+
+### Rodando o projeto
+
+- Rodar frontend em desenvolvimento:
+
+```powershell
+cd frontend
 npm run dev
 ```
+
+- Rodar testes do root (Vitest):
+
+```powershell
+npm test
+```
+
+- Alternativa (script já configurado no root):
+
+```powershell
+npm run dev      # redireciona para frontend.dev
+git scripts do frontend
+```
+
+> Observação: o projeto tem duas árvores de dependências (`node_modules` em `./` e em `./frontend`). Essa divisão é intencional para separar backend/testes e frontend.
 
 ## Quais tecnologias e frarramentas são ultilizadas neste projeto?
 
