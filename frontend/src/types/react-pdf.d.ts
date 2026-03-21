@@ -30,5 +30,5 @@ declare module 'react-pdf' {
 }
 
 declare module 'epubjs' {
-  export default function ePub(url: string): any;
+  export default function ePub(url: string): unknown;
 }
