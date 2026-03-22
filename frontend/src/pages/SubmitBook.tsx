@@ -91,9 +91,14 @@ const SubmitBook = () => {
 
       toast.success("Livro enviado com sucesso! Aguarde a aprovação.");
       navigate("/profile");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao enviar livro:", error);
-      toast.error("Erro ao enviar livro: " + error.message);
+
+      if (error instanceof Error) {
+        toast.error("Erro ao enviar livro: " + error.message);
+      } else {
+        toast.error("Erro ao enviar livro: erro desconhecido");
+      }
     } finally {
       setLoading(false);
     }
