@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
 import { toast } from "sonner";
 
 const Auth = () => {
@@ -41,6 +42,7 @@ const Auth = () => {
   }, [isLoggedIn, navigate]);
 
   const handleGuestLogin = () => {
+    localStorage.setItem(GUEST_AUTH_FLAG_KEY, "guest");
     setAuthType("guest");
     setUserId(null);
     navigate("/", { replace: true });

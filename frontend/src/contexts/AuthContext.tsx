@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  GUEST_AUTH_FLAG_KEY,
+  GUEST_AVATAR_KEY,
+  GUEST_BANNER_KEY,
+} from "@/integrations/supabase/profileMediaStorage";
 import { User, Session } from "@supabase/supabase-js";
 
 type AuthType = "guest" | "email" | "google" | null;
@@ -50,16 +55,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentSession?.user ?? null);
         
         if (currentSession?.user) {
+          localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
           setUserId(currentSession.user.id);
-          setAuthType("email"); // Pode ser email ou google
-          
-          // Adia o carregamento do perfil
+          setAuthType("email");
+
           setTimeout(() => {
             loadProfile(currentSession.user.id);
           }, 0);
         } else {
           setUserId(null);
-          setAuthType(null);
+          if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
+            setAuthType("guest");
+            setAvatarImage(localStorage.getItem(GUEST_AVATAR_KEY) || "");
+            setBannerImage(localStorage.getItem(GUEST_BANNER_KEY) || "");
+          } else {
+            setAuthType(null);
+            setAvatarImage("");
+            setBannerImage("");
+          }
         }
         
         setLoading(false);
@@ -72,11 +85,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentSession?.user ?? null);
       
       if (currentSession?.user) {
+        localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
         setUserId(currentSession.user.id);
         setAuthType("email");
         loadProfile(currentSession.user.id);
+      } else if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
+        setUserId(null);
+        setAuthType("guest");
+        setAvatarImage(localStorage.getItem(GUEST_AVATAR_KEY) || "");
+        setBannerImage(localStorage.getItem(GUEST_BANNER_KEY) || "");
       }
-      
+
       setLoading(false);
     });
 
@@ -165,6 +184,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
+    localStorage.removeItem(GUEST_AVATAR_KEY);
+    localStorage.removeItem(GUEST_BANNER_KEY);
     setAuthType(null);
     setAvatarImage("");
     setBannerImage("");

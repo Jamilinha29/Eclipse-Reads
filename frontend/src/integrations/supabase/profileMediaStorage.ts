@@ -4,9 +4,33 @@ import { supabase } from "@/integrations/supabase/client";
  * Livros (SubmitBook / MySubmissions): `supabase.storage.from("books").upload(..., { cacheControl: "3600", upsert })`
  * e remoção com `.from("books").remove([filePath])`.
  *
- * Avatar/banner: mesmo fluxo no cliente, bucket separado `avatars` (só imagens de perfil).
+ * Utilizador com conta (incl. admin): bucket `avatars` + tabela `profiles`.
+ * Convidado: sem JWT → não usa Storage; imagens em localStorage (data URL), como a biblioteca convidada.
  */
 export const PROFILE_MEDIA_BUCKET = "avatars";
+
+export const GUEST_AUTH_FLAG_KEY = "eclipse_reads_auth_type";
+export const GUEST_AVATAR_KEY = "eclipse_reads_guest_avatar";
+export const GUEST_BANNER_KEY = "eclipse_reads_guest_banner";
+/** Limite por ficheiro no modo convidado (localStorage). */
+export const GUEST_PROFILE_IMAGE_MAX_BYTES = 1_500_000;
+
+export function readImageFileAsDataUrl(file: File, maxBytes = GUEST_PROFILE_IMAGE_MAX_BYTES): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Selecione um ficheiro de imagem."));
+      return;
+    }
+    if (file.size > maxBytes) {
+      reject(new Error(`Imagem demasiado grande (máx. ${Math.round(maxBytes / 1024)} KB como convidado).`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    reader.readAsDataURL(file);
+  });
+}
 
 /** Mesmo cacheControl usado em SubmitBook para os PDFs/epub. */
 export const PROFILE_IMAGE_UPLOAD_OPTIONS = {

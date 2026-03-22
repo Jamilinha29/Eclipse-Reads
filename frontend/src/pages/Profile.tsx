@@ -12,6 +12,9 @@ import {
   PROFILE_MEDIA_BUCKET,
   PROFILE_IMAGE_UPLOAD_OPTIONS,
   removePreviousProfileObject,
+  readImageFileAsDataUrl,
+  GUEST_AVATAR_KEY,
+  GUEST_BANNER_KEY,
 } from "@/integrations/supabase/profileMediaStorage";
 import { useToast } from "@/hooks/use-toast";
 
@@ -148,7 +151,30 @@ const Profile = () => {
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
+    e.target.value = "";
+
+    if (!file) return;
+
+    if (authType === "guest") {
+      try {
+        const dataUrl = await readImageFileAsDataUrl(file);
+        localStorage.setItem(GUEST_AVATAR_KEY, dataUrl);
+        setAvatarImage(dataUrl);
+        toast({
+          title: "Avatar atualizado!",
+          description: "Imagem guardada neste dispositivo (modo convidado).",
+        });
+      } catch (error: unknown) {
+        const description =
+          error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string"
+            ? (error as { message: string }).message
+            : "Tente outra imagem.";
+        toast({ title: "Erro ao salvar avatar", description, variant: "destructive" });
+      }
+      return;
+    }
+
+    if (!userId) return;
 
     const objectPath = `${userId}/avatar`;
 
@@ -205,7 +231,30 @@ const Profile = () => {
 
   const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
+    e.target.value = "";
+
+    if (!file) return;
+
+    if (authType === "guest") {
+      try {
+        const dataUrl = await readImageFileAsDataUrl(file);
+        localStorage.setItem(GUEST_BANNER_KEY, dataUrl);
+        setBannerImage(dataUrl);
+        toast({
+          title: "Banner atualizado!",
+          description: "Imagem guardada neste dispositivo (modo convidado).",
+        });
+      } catch (error: unknown) {
+        const description =
+          error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string"
+            ? (error as { message: string }).message
+            : "Tente outra imagem.";
+        toast({ title: "Erro ao salvar banner", description, variant: "destructive" });
+      }
+      return;
+    }
+
+    if (!userId) return;
 
     const objectPath = `${userId}/banner`;
 
