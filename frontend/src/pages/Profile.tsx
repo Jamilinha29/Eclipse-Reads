@@ -8,6 +8,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  PROFILE_MEDIA_BUCKET,
+  PROFILE_IMAGE_UPLOAD_OPTIONS,
+  removePreviousProfileObject,
+} from "@/integrations/supabase/profileMediaStorage";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReadingGoal {
@@ -56,27 +61,6 @@ const Profile = () => {
 
     checkAdmin();
   }, [userId]);
-
-  useEffect(() => {
-  const ensureProfileExists = async () => {
-    if (!userId) return;
-
-    const { data } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!data) {
-      await supabase.from("profiles").insert({
-        user_id: userId,
-        username: username,
-      });
-    }
-  };
-
-  ensureProfileExists();
-}, [userId]);
 
   useEffect(() => {
     const ensureProfileExists = async () => {
@@ -163,114 +147,118 @@ const Profile = () => {
   const stats = isAdmin ? adminStats : userStats;
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file || !userId) return;
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
 
-  try {
-    // Envia para o Supabase Storage
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${userId}/avatar-${Date.now()}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true });
+    const objectPath = `${userId}/avatar`;
 
-    if (uploadError) throw uploadError;
+    try {
+      const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("banner_image, avatar_image")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    // Obtém a URL pública
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
+      await removePreviousProfileObject(currentProfile?.avatar_image, objectPath);
 
-    // 🔥 NOVO: buscar dados atuais para não sobrescrever
-    const { data: currentProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+      const { error: uploadError } = await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET)
+        .upload(objectPath, file, {
+          ...PROFILE_IMAGE_UPLOAD_OPTIONS,
+          contentType: file.type || undefined,
+        });
 
-    // Salva no banco de dados
-    const { error: dbError } = await supabase
-      .from('profiles')
-      .upsert({
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
+
+      const { error: dbError } = await supabase.from("profiles").upsert({
         user_id: userId,
-        avatar_image: publicUrl + '?t=' + Date.now(), // 🔥 evita cache
-        banner_image: currentProfile?.banner_image || null,
+        avatar_image: publicUrl,
+        banner_image: currentProfile?.banner_image ?? null,
         username: username,
       });
 
-    if (dbError) throw dbError;
+      if (dbError) throw dbError;
 
-    setAvatarImage(publicUrl + '?t=' + Date.now());
+      setAvatarImage(`${publicUrl}?t=${Date.now()}`);
 
-    toast({
-      title: "Avatar atualizado!",
-      description: "Sua imagem foi salva com sucesso.",
-    });
-  } catch (error) {
-    console.error('Error uploading avatar:', error);
-    toast({
-      title: "Erro ao salvar avatar",
-      description: "Tente novamente mais tarde.",
-      variant: "destructive",
-    });
-  }
- };
+      toast({
+        title: "Avatar atualizado!",
+        description: "Sua imagem foi salva com sucesso.",
+      });
+    } catch (error: unknown) {
+      console.error("Error uploading avatar:", error);
+      const description =
+        error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : "Tente novamente mais tarde.";
+      toast({
+        title: "Erro ao salvar avatar",
+        description,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file || !userId) return;
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
 
-  try {
-    // Envia para o Supabase Storage
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${userId}/banner-${Date.now()}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true });
+    const objectPath = `${userId}/banner`;
 
-    if (uploadError) throw uploadError;
+    try {
+      const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("banner_image, avatar_image")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    // Obtém a URL pública
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
+      await removePreviousProfileObject(currentProfile?.banner_image, objectPath);
 
-    // 🔥 NOVO: buscar dados atuais para não sobrescrever
-    const { data: currentProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+      const { error: uploadError } = await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET)
+        .upload(objectPath, file, {
+          ...PROFILE_IMAGE_UPLOAD_OPTIONS,
+          contentType: file.type || undefined,
+        });
 
-    // Salva no banco de dados
-    const { error: dbError } = await supabase
-      .from('profiles')
-      .upsert({
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
+
+      const { error: dbError } = await supabase.from("profiles").upsert({
         user_id: userId,
-        banner_image: publicUrl + '?t=' + Date.now(), // 🔥 evita cache
-        avatar_image: currentProfile?.avatar_image || null,
+        banner_image: publicUrl,
+        avatar_image: currentProfile?.avatar_image ?? null,
         username: username,
       });
 
-    if (dbError) throw dbError;
+      if (dbError) throw dbError;
 
-    setBannerImage(publicUrl + '?t=' + Date.now());
+      setBannerImage(`${publicUrl}?t=${Date.now()}`);
 
-    toast({
-      title: "Banner atualizado!",
-      description: "Sua imagem foi salva com sucesso.",
-    });
-  } catch (error) {
-    console.error('Error uploading banner:', error);
-    toast({
-      title: "Erro ao salvar banner",
-      description: "Tente novamente mais tarde.",
-      variant: "destructive",
-    });
-  }
- };
+      toast({
+        title: "Banner atualizado!",
+        description: "Sua imagem foi salva com sucesso.",
+      });
+    } catch (error: unknown) {
+      console.error("Error uploading banner:", error);
+      const description =
+        error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : "Tente novamente mais tarde.";
+      toast({
+        title: "Erro ao salvar banner",
+        description,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleCreateGoal = async () => {
     if (!newGoalTitle || !newGoalTarget || !userId) {
