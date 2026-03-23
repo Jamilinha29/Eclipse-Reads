@@ -28,7 +28,6 @@ const Search = () => {
   const genres = [
     "Todos os Gêneros",
     "Ficção",
-    "Livre",
     "Aventura",
     "Romance",
     "Fantasia",
