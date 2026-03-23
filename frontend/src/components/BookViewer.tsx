@@ -16,10 +16,8 @@ interface BookViewerProps {
   readingMode: "horizontal" | "vertical";
   pageSize?: "margins" | "fullscreen";
   onTocLoaded?: (items: any[]) => void;
-  fontSize?: number;
-  theme?: "light" | "sepia" | "sepia-contrast" | "dark";
-  fontFamily?: "serif" | "sans" | "mono";
-  fontWeight?: "normal" | "medium" | "bold";
+  /** Multiplicador da largura da folha do PDF (1 = 100%). */
+  pdfZoom?: number;
 }
 
 export const BookViewer = ({ 
@@ -31,10 +29,7 @@ export const BookViewer = ({
   readingMode,
   pageSize = "margins",
   onTocLoaded,
-  fontSize = 18,
-  theme = "light",
-  fontFamily = "serif",
-  fontWeight = "normal"
+  pdfZoom = 1,
 }: BookViewerProps) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [epubBook, setEpubBook] = useState<any>(null);
@@ -69,7 +64,11 @@ export const BookViewer = ({
         spread: 'none'
       });
       
-      // Aplica tema
+      const theme = "light" as const;
+      const fontSize = 18;
+      const fontFamily = "serif" as const;
+      const fontWeight = "normal" as const;
+
       const themeColors = {
         light: { background: '#ffffff', color: '#000000' },
         sepia: { background: '#f4ecd8', color: '#5c4b37' },
@@ -79,7 +78,6 @@ export const BookViewer = ({
       
       rendition.themes.default(themeColors[theme]);
       
-      // Aplica configurações de fonte
       const fontFamilies = {
         serif: 'Georgia, serif',
         sans: 'Arial, sans-serif',
@@ -118,7 +116,7 @@ export const BookViewer = ({
         rendition.destroy();
       };
     }
-  }, [fileUrl, normalizedFileType, onTocLoaded, readingMode, pageSize, fontSize, theme, fontFamily, fontWeight, onTotalPagesChange]);
+  }, [fileUrl, normalizedFileType, onTocLoaded, readingMode, pageSize, onTotalPagesChange]);
 
   // Trata navegação de páginas para EPUB
   useEffect(() => {
@@ -133,13 +131,14 @@ export const BookViewer = ({
   }, [currentPage, epubBook]);
 
   if (normalizedFileType === 'pdf') {
-    const maxWidth = pageSize === "fullscreen" 
+    const baseMaxWidth = pageSize === "fullscreen" 
       ? window.innerWidth 
       : Math.min(window.innerWidth - 100, 800);
+    const pageWidth = Math.round(baseMaxWidth * pdfZoom);
     
     if (readingMode === 'vertical') {
       return (
-        <div className="flex justify-center py-8">
+        <div className="flex justify-center py-8 overflow-x-auto">
           <Document
             file={fileUrl}
             onLoadSuccess={onDocumentLoadSuccess}
@@ -152,7 +151,7 @@ export const BookViewer = ({
                   pageNumber={index + 1}
                   renderTextLayer={true}
                   renderAnnotationLayer={true}
-                  width={maxWidth}
+                  width={pageWidth}
                 />
               </div>
             ))}
@@ -162,7 +161,7 @@ export const BookViewer = ({
     }
 
     return (
-      <div className="flex justify-center py-8">
+      <div className="flex justify-center py-8 overflow-x-auto">
         <Document
           file={fileUrl}
           onLoadSuccess={onDocumentLoadSuccess}
@@ -173,7 +172,7 @@ export const BookViewer = ({
             pageNumber={currentPage} 
             renderTextLayer={true}
             renderAnnotationLayer={true}
-            width={maxWidth}
+            width={pageWidth}
           />
         </Document>
       </div>

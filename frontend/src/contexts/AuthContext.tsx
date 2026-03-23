@@ -5,6 +5,7 @@ import {
   GUEST_AVATAR_KEY,
   GUEST_BANNER_KEY,
 } from "@/integrations/supabase/profileMediaStorage";
+import { THEME_STORAGE_KEY, getStoredTheme } from "@/lib/themeStorage";
 import { User, Session } from "@supabase/supabase-js";
 
 type AuthType = "guest" | "email" | "google" | null;
@@ -41,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">(() => getStoredTheme() ?? "dark");
 
   const isLoggedIn = authType !== null;
   const bookLimit = authType === "guest" ? 7 : Infinity;
@@ -102,6 +103,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Mantém <html class="dark"> e localStorage alinhados com o tema (sobrevive a logout/login e F5).
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
+
   // Carrega perfil do Supabase
   const loadProfile = async (userIdToLoad: string) => {
     const { data: profileData } = await supabase
@@ -123,8 +134,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .eq("user_id", userIdToLoad)
       .maybeSingle();
 
-    if (settingsData) {
-      setTheme(settingsData.theme as "light" | "dark");
+    const t = settingsData?.theme;
+    if (t === "light" || t === "dark") {
+      setTheme(t);
+    } else {
+      const stored = getStoredTheme();
+      if (stored) setTheme(stored);
     }
   };
 

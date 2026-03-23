@@ -37,10 +37,8 @@ const Read = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [fileUrl, setFileUrl] = useState<string>("");
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [fontSize, setFontSize] = useState(18);
-  const [theme, setTheme] = useState<"light" | "sepia" | "sepia-contrast" | "dark">("light");
-  const [fontFamily, setFontFamily] = useState<"serif" | "sans" | "mono">("serif");
-  const [fontWeight, setFontWeight] = useState<"normal" | "medium" | "bold">("normal");
+  /** Zoom da folha do PDF (1 = 100%; afeta apenas PDF). */
+  const [pdfZoom, setPdfZoom] = useState(1);
   const [readingMode, setReadingMode] = useState<"horizontal" | "vertical">("horizontal");
   const [pageSize, setPageSize] = useState<"margins" | "fullscreen">("margins");
   const [showToc, setShowToc] = useState(false);
@@ -265,106 +263,24 @@ const Read = () => {
                     </div>
                     
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Tamanho da Fonte</DropdownMenuLabel>
+                    <DropdownMenuLabel>Zoom da página (PDF)</DropdownMenuLabel>
                     <div className="px-2 py-2">
                       <Slider
-                        value={[fontSize]}
-                        onValueChange={([value]) => setFontSize(value)}
-                        min={12}
-                        max={24}
-                        step={1}
+                        value={[pdfZoom]}
+                        onValueChange={([value]) => setPdfZoom(value)}
+                        min={0.5}
+                        max={2}
+                        step={0.05}
                         className="w-full"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>12px</span>
-                        <span>{fontSize}px</span>
-                        <span>24px</span>
+                        <span>50%</span>
+                        <span>{Math.round(pdfZoom * 100)}%</span>
+                        <span>200%</span>
                       </div>
-                    </div>
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Tema</DropdownMenuLabel>
-                    <div className="px-2 py-2 grid grid-cols-2 gap-2">
-                      <Button
-                        variant={theme === "light" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setTheme("light")}
-                      >
-                        Claro
-                      </Button>
-                      <Button
-                        variant={theme === "sepia" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setTheme("sepia")}
-                      >
-                        Sépia
-                      </Button>
-                      <Button
-                        variant={theme === "sepia-contrast" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setTheme("sepia-contrast")}
-                      >
-                        Sépia Alto
-                      </Button>
-                      <Button
-                        variant={theme === "dark" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setTheme("dark")}
-                      >
-                        Escuro
-                      </Button>
-                    </div>
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Família da Fonte</DropdownMenuLabel>
-                    <div className="px-2 py-2 grid grid-cols-3 gap-2">
-                      <Button
-                        variant={fontFamily === "serif" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontFamily("serif")}
-                      >
-                        Serif
-                      </Button>
-                      <Button
-                        variant={fontFamily === "sans" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontFamily("sans")}
-                      >
-                        Sans
-                      </Button>
-                      <Button
-                        variant={fontFamily === "mono" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontFamily("mono")}
-                      >
-                        Mono
-                      </Button>
-                    </div>
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Peso da Fonte</DropdownMenuLabel>
-                    <div className="px-2 py-2 grid grid-cols-3 gap-2">
-                      <Button
-                        variant={fontWeight === "normal" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontWeight("normal")}
-                      >
-                        Normal
-                      </Button>
-                      <Button
-                        variant={fontWeight === "medium" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontWeight("medium")}
-                      >
-                        Médio
-                      </Button>
-                      <Button
-                        variant={fontWeight === "bold" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFontWeight("bold")}
-                      >
-                        Negrito
-                      </Button>
+                      <p className="text-xs text-muted-foreground mt-2 px-1">
+                        Aumenta ou diminui o tamanho da folha do PDF na tela.
+                      </p>
                     </div>
 
                     <DropdownMenuSeparator />
@@ -426,10 +342,7 @@ const Read = () => {
           readingMode={readingMode}
           pageSize={pageSize}
           onTocLoaded={handleTocLoaded}
-          fontSize={fontSize}
-          theme={theme}
-          fontFamily={fontFamily}
-          fontWeight={fontWeight}
+          pdfZoom={pdfZoom}
         />
       </main>
 

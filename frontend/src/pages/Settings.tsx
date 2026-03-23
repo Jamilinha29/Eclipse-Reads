@@ -30,7 +30,9 @@ const Settings = () => {
         .maybeSingle();
 
       if (data) {
-        setTheme(data.theme as "light" | "dark");
+        const t = data.theme as "light" | "dark";
+        setTheme(t);
+        setGlobalTheme(t);
         setSoundEnabled(data.sound_enabled);
         setNotificationsEnabled(data.notifications_enabled);
       }
@@ -69,12 +71,9 @@ const Settings = () => {
   };
 
   useEffect(() => {
+    setGlobalTheme(theme);
     if (userId) {
       saveSettings();
-      // Aplica o tema ao documento
-      document.documentElement.classList.toggle("dark", theme === "dark");
-      // Atualiza o tema global
-      setGlobalTheme(theme);
     }
   }, [theme, soundEnabled, notificationsEnabled, userId]);
 
