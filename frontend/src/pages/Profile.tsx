@@ -76,10 +76,10 @@ const Profile = () => {
         .maybeSingle();
 
       if (!data) {
-        await supabase.from("profiles").insert({
-          user_id: userId,
-          username: username,
-        });
+        await supabase.from("profiles").upsert(
+          { user_id: userId, username: username },
+          { onConflict: "user_id" }
+        );
       }
     };
 
@@ -200,12 +200,15 @@ const Profile = () => {
         data: { publicUrl },
       } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
 
-      const { error: dbError } = await supabase.from("profiles").upsert({
-        user_id: userId,
-        avatar_image: publicUrl,
-        banner_image: currentProfile?.banner_image ?? null,
-        username: username,
-      });
+      const { error: dbError } = await supabase.from("profiles").upsert(
+        {
+          user_id: userId,
+          avatar_image: publicUrl,
+          banner_image: currentProfile?.banner_image ?? null,
+          username: username,
+        },
+        { onConflict: "user_id" }
+      );
 
       if (dbError) throw dbError;
 
@@ -280,12 +283,15 @@ const Profile = () => {
         data: { publicUrl },
       } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
 
-      const { error: dbError } = await supabase.from("profiles").upsert({
-        user_id: userId,
-        banner_image: publicUrl,
-        avatar_image: currentProfile?.avatar_image ?? null,
-        username: username,
-      });
+      const { error: dbError } = await supabase.from("profiles").upsert(
+        {
+          user_id: userId,
+          banner_image: publicUrl,
+          avatar_image: currentProfile?.avatar_image ?? null,
+          username: username,
+        },
+        { onConflict: "user_id" }
+      );
 
       if (dbError) throw dbError;
 

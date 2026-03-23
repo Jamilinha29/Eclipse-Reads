@@ -153,14 +153,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error("Error updating profile:", error);
         }
       } else {
-        const { error } = await supabase
-          .from("profiles")
-          .upsert({
+        const { error } = await supabase.from("profiles").upsert(
+          {
             user_id: userId,
             username,
             avatar_image: avatarImage,
             banner_image: bannerImage,
-          });
+          },
+          { onConflict: "user_id" }
+        );
 
         if (error) {
           console.error("Error creating profile:", error);
