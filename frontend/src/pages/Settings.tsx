@@ -7,11 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 
 const Settings = () => {
-  const { username, setUsername, userId, theme: globalTheme, setTheme: setGlobalTheme } = useAuth();
+  const { username, setUsername, userId, token, theme: globalTheme, setTheme: setGlobalTheme } = useAuth();
   const [localUsername, setLocalUsername] = useState(username);
   const [theme, setTheme] = useState<"light" | "dark">(globalTheme);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -25,53 +25,29 @@ const Settings = () => {
   // Carrega configurações do Supabase
   useEffect(() => {
     const loadSettings = async () => {
-      if (!userId) return;
+      if (!userId || !token) return;
 
-      const { data } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { settings } = await api.getMeSettings(token);
 
-      if (data) {
-        const t = data.theme as "light" | "dark";
+      if (settings) {
+        const t = settings.theme as "light" | "dark";
         setTheme(t);
         setGlobalTheme(t);
-        setSoundEnabled(data.sound_enabled);
-        setNotificationsEnabled(data.notifications_enabled);
+        setSoundEnabled(!!settings.sound_enabled);
+        setNotificationsEnabled(!!settings.notifications_enabled);
       }
     };
 
     loadSettings();
-  }, [userId]);
+  }, [userId, token]);
 
-  // Salva configurações no Supabase
+  // Salva configurações via backend
   const saveSettings = async () => {
-    if (!userId) return;
-
-    const { data: existing } = await supabase
-      .from("user_settings")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from("user_settings")
-        .update({
-          theme,
-          sound_enabled: soundEnabled,
-          notifications_enabled: notificationsEnabled,
-        })
-        .eq("user_id", userId);
-    } else {
-      await supabase.from("user_settings").upsert({
-        user_id: userId,
-        theme,
-        sound_enabled: soundEnabled,
-        notifications_enabled: notificationsEnabled,
-      });
-    }
+    if (!userId || !token) return;
+    await api.updateMeSettings(
+      { theme, sound_enabled: soundEnabled, notifications_enabled: notificationsEnabled },
+      token
+    );
   };
 
   useEffect(() => {
@@ -79,7 +55,7 @@ const Settings = () => {
     if (userId) {
       saveSettings();
     }
-  }, [theme, soundEnabled, notificationsEnabled, userId]);
+  }, [theme, soundEnabled, notificationsEnabled, userId, token]);
 
   const handleSaveUsername = () => {
     setUsername(localUsername);

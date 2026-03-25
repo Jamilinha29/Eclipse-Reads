@@ -1,40 +1,34 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 interface AdminRouteProps {
   children: React.ReactNode;
 }
 
 const AdminRoute = ({ children }: AdminRouteProps) => {
-  const { isLoggedIn, loading: authLoading, userId } = useAuth();
+  const { isLoggedIn, loading: authLoading, userId, token } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId) {
+      if (!userId || !token) {
         setIsAdmin(false);
         setChecking(false);
         return;
       }
 
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      setIsAdmin(!!data);
+      const result = await api.getMeAdmin(token);
+      setIsAdmin(!!result.isAdmin);
       setChecking(false);
     };
 
     if (!authLoading) {
       checkAdmin();
     }
-  }, [userId, authLoading]);
+  }, [userId, token, authLoading]);
 
   if (authLoading || checking) {
     return (

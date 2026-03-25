@@ -3,8 +3,8 @@ import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+// (não usamos o api.ts aqui porque ele ainda não expõe reviews)
 
 interface Review {
   id: string;
@@ -15,7 +15,7 @@ interface Review {
 }
 
 export const ReviewSection = ({ bookId }: { bookId: string }) => {
-  const { userId } = useAuth();
+  const { userId, token } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [userRating, setUserRating] = useState(0);
   const [userComment, setUserComment] = useState("");
@@ -25,17 +25,15 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
   }, [bookId]);
 
   const loadReviews = async () => {
-    const { data } = await supabase
-      .from("reviews")
-      .select("*")
-      .eq("book_id", bookId)
-      .order("created_at", { ascending: false });
-    
-    if (data) setReviews(data);
+    const response = await fetch(
+      `${(import.meta.env.VITE_BOOKS_API_URL as string) || (import.meta.env.VITE_API_URL as string) || "http://localhost:4000"}/books/${bookId}/reviews`
+    );
+    const result = await response.json();
+    if (result?.reviews) setReviews(result.reviews);
   };
 
   const handleSubmit = async () => {
-    if (!userId) {
+    if (!userId || !token) {
       toast.error("Faça login para avaliar");
       return;
     }
@@ -45,22 +43,26 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
       return;
     }
 
-    const { error } = await supabase
-      .from("reviews")
-      .upsert({
-        user_id: userId,
-        book_id: bookId,
-        rating: userRating,
-        comment: userComment || null,
+    try {
+      const base =
+        (import.meta.env.VITE_BOOKS_API_URL as string) ||
+        (import.meta.env.VITE_API_URL as string) ||
+        "http://localhost:4000";
+      const response = await fetch(`${base}/books/${bookId}/reviews`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rating: userRating, comment: userComment || null }),
       });
-
-    if (error) {
-      toast.error("Erro ao salvar avaliação");
-    } else {
+      if (!response.ok) throw new Error("Erro ao salvar avaliação");
       toast.success("Avaliação salva!");
       setUserRating(0);
       setUserComment("");
       loadReviews();
+    } catch {
+      toast.error("Erro ao salvar avaliação");
     }
   };
 

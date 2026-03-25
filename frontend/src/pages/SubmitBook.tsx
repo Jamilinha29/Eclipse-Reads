@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, ArrowLeft, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
 
 const SubmitBook = () => {
   const [title, setTitle] = useState("");
@@ -19,7 +19,7 @@ const SubmitBook = () => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, token } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -46,7 +46,7 @@ const SubmitBook = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title || !author || !description || !category || !file || !userId) {
+    if (!title || !author || !description || !category || !file || !userId || !token) {
       toast.error("Preencha todos os campos e selecione um arquivo");
       return;
     }
@@ -54,40 +54,10 @@ const SubmitBook = () => {
     setLoading(true);
 
     try {
-      // Envia arquivo para o storage
-      const fileExtension = file.name.slice(file.name.lastIndexOf('.'));
-      const fileName = `${userId}/${Date.now()}_${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('books')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Cria registro de submissão
-      const { error: submissionError } = await supabase
-        .from('book_submissions')
-        .insert({
-          user_id: userId,
-          title,
-          author,
-          description,
-          category,
-          file_path: fileName,
-          file_type: fileExtension.replace('.', ''),
-          status: 'pending'
-        });
-
-      if (submissionError) {
-        // Se a submissão falhar, exclui o arquivo enviado
-        await supabase.storage.from('books').remove([fileName]);
-        throw submissionError;
-      }
+      await api.createSubmission(
+        { title, author, description, category, file },
+        token
+      );
 
       toast.success("Livro enviado com sucesso! Aguarde a aprovação.");
       navigate("/profile");

@@ -6,6 +6,7 @@ import {
   GUEST_BANNER_KEY,
 } from "@/integrations/supabase/profileMediaStorage";
 import { THEME_STORAGE_KEY, getStoredTheme } from "@/lib/themeStorage";
+import { api } from "@/lib/api";
 import { User, Session } from "@supabase/supabase-js";
 
 type AuthType = "guest" | "email" | "google" | null;
@@ -20,6 +21,7 @@ interface AuthContextType {
   userId: string | null;
   user: User | null;
   session: Session | null;
+  token: string | null;
   loading: boolean;
   theme: "light" | "dark";
   setAuthType: (type: AuthType) => void;
@@ -126,44 +128,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Carrega perfil do Supabase
   const loadProfile = async (userIdToLoad: string, currentUser?: User | null) => {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userIdToLoad)
-      .maybeSingle();
-
     const fallbackName = getDisplayNameFromUser(currentUser ?? user);
 
-    if (profileData) {
-      const resolvedName = profileData.username || fallbackName;
-      setUsername(resolvedName);
-      setAvatarImage(profileData.avatar_image || "");
-      setBannerImage(profileData.banner_image || "");
-
-      if (!profileData.username && fallbackName !== "Usuário") {
-        await supabase
-          .from("profiles")
-          .update({ username: fallbackName })
-          .eq("user_id", userIdToLoad);
-      }
-    } else {
+    const accessToken = session?.access_token ?? null;
+    if (!accessToken) {
       setUsername(fallbackName);
-      if (fallbackName !== "Usuário") {
-        await supabase.from("profiles").upsert(
-          { user_id: userIdToLoad, username: fallbackName },
-          { onConflict: "user_id" }
-        );
-      }
+      return;
+    }
+
+    const { profile } = await api.getMeProfile(accessToken);
+    const resolvedName = profile?.username || fallbackName;
+    setUsername(resolvedName);
+    setAvatarImage(profile?.avatar_image || "");
+    setBannerImage(profile?.banner_image || "");
+
+    // Se não houver username ainda, inicializa com fallback (primeiro login/cadastro)
+    if ((!profile || !profile.username) && fallbackName !== "Usuário") {
+      await api.updateMeProfile({ username: fallbackName }, accessToken);
     }
 
     // Carrega configurações de tema
-    const { data: settingsData } = await supabase
-      .from("user_settings")
-      .select("theme")
-      .eq("user_id", userIdToLoad)
-      .maybeSingle();
-
-    const t = settingsData?.theme;
+    const { settings } = await api.getMeSettings(accessToken);
+    const t = settings?.theme;
     if (t === "light" || t === "dark") {
       setTheme(t);
     } else {
@@ -172,45 +158,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Salva perfil no Supabase
+  // Salva perfil via backend (sem REST do Supabase no frontend)
   const saveProfile = async () => {
     if (!userId || authType === "guest") return;
+    const accessToken = session?.access_token ?? null;
+    if (!accessToken) return;
 
     try {
-      const { data: existing } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({
-            username,
-            avatar_image: avatarImage,
-            banner_image: bannerImage,
-          })
-          .eq("user_id", userId);
-
-        if (error) {
-          console.error("Error updating profile:", error);
-        }
-      } else {
-        const { error } = await supabase.from("profiles").upsert(
-          {
-            user_id: userId,
-            username,
-            avatar_image: avatarImage,
-            banner_image: bannerImage,
-          },
-          { onConflict: "user_id" }
-        );
-
-        if (error) {
-          console.error("Error creating profile:", error);
-        }
-      }
+      await api.updateMeProfile(
+        {
+          username,
+          avatar_image: avatarImage || undefined,
+          banner_image: bannerImage || undefined,
+        },
+        accessToken
+      );
     } catch (error) {
       console.error("Error saving profile:", error);
     }
@@ -253,6 +215,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userId,
         user,
         session,
+        token: session?.access_token ?? null,
         loading,
         theme,
         setAuthType,

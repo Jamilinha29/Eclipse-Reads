@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cd frontend && npm run dev",
+    "dev:all": "node scripts/dev-all.mjs",
     "build": "cd frontend && npm run build",
     "preview": "cd frontend && npm run preview",
     "install:frontend": "cd frontend && npm install",

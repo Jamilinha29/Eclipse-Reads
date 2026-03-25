@@ -11,31 +11,24 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { avatarImage, username, logout, userId } = useAuth();
+  const { avatarImage, username, logout, userId, token } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId) return;
-      
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .eq('role', 'admin')
-        .maybeSingle();
-      
-      setIsAdmin(!!data);
+      if (!userId || !token) return;
+      const result = await api.getMeAdmin(token);
+      setIsAdmin(!!result.isAdmin);
     };
     
     checkAdmin();
-  }, [userId]);
+  }, [userId, token]);
 
   const isActive = (path: string) => location.pathname === path;
 

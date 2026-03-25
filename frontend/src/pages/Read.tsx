@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { BookViewer } from "@/components/BookViewer";
@@ -30,7 +29,7 @@ interface Book {
 const Read = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { userId, bookLimit } = useAuth();
+  const { userId, token, bookLimit } = useAuth();
   const { addToReading, isInRead, toggleRead } = useLibrary();
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,46 +74,38 @@ const Read = () => {
 
   useEffect(() => {
     const loadProgress = async () => {
-      if (!userId || !id) return;
-
-      const { data } = await supabase
-        .from("reading_progress")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("book_id", id)
-        .maybeSingle();
-
-      if (data) {
-        setCurrentPage(data.current_page || 1);
+      if (!userId || !id || !token) return;
+      try {
+        const { progress } = await api.getReadingProgress(id, token);
+        if (progress) setCurrentPage(progress.current_page || 1);
+      } catch {
+        // ignore
       }
     };
 
     loadProgress();
-  }, [userId, id]);
+  }, [userId, id, token]);
 
   useEffect(() => {
     const saveProgress = async () => {
-      if (!userId || !id) return;
+      if (!userId || !id || !token) return;
 
       const progressPercentage = ((currentPage / totalPages) * 100).toFixed(2);
 
-      await supabase
-        .from("reading_progress")
-        .upsert({
-          user_id: userId,
-          book_id: id,
+      await api.saveReadingProgress(
+        id,
+        {
           current_page: currentPage,
           total_pages: totalPages,
           progress_percentage: parseFloat(progressPercentage),
-          last_read_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,book_id'
-        });
+        },
+        token
+      );
     };
 
     const debounceTimer = setTimeout(saveProgress, 1000);
     return () => clearTimeout(debounceTimer);
-  }, [currentPage, userId, id, totalPages]);
+  }, [currentPage, userId, id, totalPages, token]);
 
   const handleToggleRead = async () => {
     if (!id) return;

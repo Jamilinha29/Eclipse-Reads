@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, FileText, Clock, CheckCircle, XCircle, Trash2, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,51 +37,30 @@ const MySubmissions = () => {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, token } = useAuth();
 
   useEffect(() => {
     loadSubmissions();
   }, [userId]);
 
   const loadSubmissions = async () => {
-    if (!userId) return;
+    if (!userId || !token) return;
 
     setLoading(true);
-    const { data, error } = await supabase
-      .from('book_submissions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
+    try {
+      const result = await api.getMySubmissions(token);
+      setSubmissions(result.submissions || []);
+    } catch (error: any) {
       toast.error("Erro ao carregar submissões");
       console.error(error);
-    } else {
-      setSubmissions(data || []);
     }
     setLoading(false);
   };
 
   const handleDelete = async (id: string, filePath: string) => {
     try {
-      // Exclui arquivo do storage
-      const { error: storageError } = await supabase.storage
-        .from('books')
-        .remove([filePath]);
-
-      if (storageError) {
-        console.error("Erro ao deletar arquivo:", storageError);
-      }
-
-      // Exclui registro de submissão
-      const { error: dbError } = await supabase
-        .from('book_submissions')
-        .delete()
-        .eq('id', id);
-
-      if (dbError) {
-        throw dbError;
-      }
+      if (!token) throw new Error("Você precisa estar logado.");
+      await api.deleteMySubmission(id, token);
 
       toast.success("Submissão deletada com sucesso");
       setSubmissions(submissions.filter(s => s.id !== id));

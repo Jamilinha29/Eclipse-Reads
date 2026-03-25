@@ -40,6 +40,160 @@ export const api = {
     return handleResponse(response);
   },
 
+  async createSubmission(
+    payload: {
+      title: string;
+      author: string;
+      description: string;
+      category: string;
+      file: File;
+    },
+    token: string
+  ) {
+    const form = new FormData();
+    form.append("title", payload.title);
+    form.append("author", payload.author);
+    form.append("description", payload.description);
+    form.append("category", payload.category);
+    form.append("file", payload.file);
+
+    const response = await fetch(`${BOOKS_API_BASE_URL}/submissions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: form,
+    });
+    return handleResponse(response);
+  },
+
+  async getMySubmissions(token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/submissions/mine`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return handleResponse(response);
+  },
+
+  async deleteMySubmission(id: string, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/submissions/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return handleResponse(response);
+  },
+
+  // Me endpoints - profile/settings/admin/goals
+  async getMeAdmin(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/admin`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async getMeProfile(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async updateMeProfile(
+    payload: { username?: string; avatar_image?: string; banner_image?: string },
+    token: string
+  ) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  async getMeSettings(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async updateMeSettings(
+    payload: { theme?: "light" | "dark"; sound_enabled?: boolean; notifications_enabled?: boolean },
+    token: string
+  ) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  async getGoals(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async createGoal(
+    payload: { title: string; target_books: number; deadline: string | null },
+    token: string
+  ) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  async updateGoal(
+    id: string,
+    payload: { current_books?: number; completed?: boolean },
+    token: string
+  ) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals/${id}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  async deleteGoal(id: string, token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async getReadingProgress(bookId: string, token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/reading-progress/${bookId}`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async saveReadingProgress(
+    bookId: string,
+    payload: { current_page: number; total_pages: number; progress_percentage: number },
+    token: string
+  ) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/reading-progress/${bookId}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
   async createBook(book: Record<string, any>) {
     const response = await fetch(`${BOOKS_API_BASE_URL}/books`, {
       method: 'POST',

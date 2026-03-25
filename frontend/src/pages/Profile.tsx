@@ -7,7 +7,6 @@ import { useLibrary } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import {
   PROFILE_MEDIA_BUCKET,
   PROFILE_IMAGE_UPLOAD_OPTIONS,
@@ -17,6 +16,8 @@ import {
   GUEST_BANNER_KEY,
 } from "@/integrations/supabase/profileMediaStorage";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReadingGoal {
   id: string;
@@ -29,7 +30,7 @@ interface ReadingGoal {
 
 const Profile = () => {
   const { favorites, reading, read } = useLibrary();
-  const { isLoggedIn, authType, avatarImage, setAvatarImage, bannerImage, setBannerImage, username, userId } = useAuth();
+  const { isLoggedIn, authType, avatarImage, setAvatarImage, bannerImage, setBannerImage, username, userId, token } = useAuth();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -50,63 +51,24 @@ const Profile = () => {
   // Verifica se o usuário é admin
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId) return;
-
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      setIsAdmin(!!data);
+      if (!userId || !token) return;
+      const result = await api.getMeAdmin(token);
+      setIsAdmin(!!result.isAdmin);
     };
 
     checkAdmin();
-  }, [userId]);
+  }, [userId, token]);
 
   useEffect(() => {
-    const ensureProfileExists = async () => {
-      if (!userId) return;
-
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (!data) {
-        await supabase.from("profiles").upsert(
-          { user_id: userId, username: username },
-          { onConflict: "user_id" }
-        );
-      }
-    };
-
-    ensureProfileExists();
+    // profile é garantido/atualizado via AuthContext + /me/profile
   }, [userId]);
 
   // Carrega estatísticas do administrador
   useEffect(() => {
     const loadAdminStats = async () => {
       if (!isAdmin) return;
-
-      const [booksResult, submissionsResult, categoriesResult] = await Promise.all([
-        supabase.from("books").select("id", { count: "exact", head: true }),
-        supabase.from("book_submissions").select("status", { count: "exact" }),
-        supabase.from("books").select("category"),
-      ]);
-
-      const pendingCount = submissionsResult.data?.filter((s) => s.status === "pending").length || 0;
-      const approvedCount = submissionsResult.data?.filter((s) => s.status === "approved").length || 0;
-      const uniqueCategories = new Set(categoriesResult.data?.map((b) => b.category) || []).size;
-
-      setAdminStatsData({
-        totalBooks: booksResult.count || 0,
-        pendingSubmissions: pendingCount,
-        approvedSubmissions: approvedCount,
-        totalCategories: uniqueCategories,
-      });
+      // Mantém UI mas evita expor Supabase REST no frontend.
+      // (Implementação completa de stats/admin será migrada no AdminPanel.)
     };
 
     loadAdminStats();
@@ -115,21 +77,13 @@ const Profile = () => {
   // Carrega metas do Supabase
   useEffect(() => {
     const loadGoals = async () => {
-      if (!userId || isAdmin) return;
-
-      const { data } = await supabase
-        .from("reading_goals")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-
-      if (data) {
-        setGoals(data as ReadingGoal[]);
-      }
+      if (!userId || isAdmin || !token) return;
+      const { goals } = await api.getGoals(token);
+      setGoals((goals ?? []) as ReadingGoal[]);
     };
 
     loadGoals();
-  }, [userId, isAdmin]);
+  }, [userId, isAdmin, token]);
 
   const userStats = [
     { icon: Heart, label: "Favoritos", value: favorites.length },
@@ -179,11 +133,7 @@ const Profile = () => {
     const objectPath = `${userId}/avatar`;
 
     try {
-      const { data: currentProfile } = await supabase
-        .from("profiles")
-        .select("banner_image, avatar_image")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { profile: currentProfile } = token ? await api.getMeProfile(token) : { profile: null };
 
       await removePreviousProfileObject(currentProfile?.avatar_image, objectPath);
 
@@ -200,17 +150,12 @@ const Profile = () => {
         data: { publicUrl },
       } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
 
-      const { error: dbError } = await supabase.from("profiles").upsert(
-        {
-          user_id: userId,
-          avatar_image: publicUrl,
-          banner_image: currentProfile?.banner_image ?? null,
-          username: username,
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (dbError) throw dbError;
+      if (token) {
+        await api.updateMeProfile(
+          { avatar_image: publicUrl, banner_image: currentProfile?.banner_image ?? undefined, username },
+          token
+        );
+      }
 
       setAvatarImage(`${publicUrl}?t=${Date.now()}`);
 
@@ -262,11 +207,7 @@ const Profile = () => {
     const objectPath = `${userId}/banner`;
 
     try {
-      const { data: currentProfile } = await supabase
-        .from("profiles")
-        .select("banner_image, avatar_image")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { profile: currentProfile } = token ? await api.getMeProfile(token) : { profile: null };
 
       await removePreviousProfileObject(currentProfile?.banner_image, objectPath);
 
@@ -283,17 +224,12 @@ const Profile = () => {
         data: { publicUrl },
       } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
 
-      const { error: dbError } = await supabase.from("profiles").upsert(
-        {
-          user_id: userId,
-          banner_image: publicUrl,
-          avatar_image: currentProfile?.avatar_image ?? null,
-          username: username,
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (dbError) throw dbError;
+      if (token) {
+        await api.updateMeProfile(
+          { banner_image: publicUrl, avatar_image: currentProfile?.avatar_image ?? undefined, username },
+          token
+        );
+      }
 
       setBannerImage(`${publicUrl}?t=${Date.now()}`);
 
@@ -316,28 +252,16 @@ const Profile = () => {
   };
 
   const handleCreateGoal = async () => {
-    if (!newGoalTitle || !newGoalTarget || !userId) {
+    if (!newGoalTitle || !newGoalTarget || !userId || !token) {
       toast({ title: "Preencha todos os campos", variant: "destructive" });
       return;
     }
 
-    const { data, error } = await supabase
-      .from("reading_goals")
-      .upsert({
-        user_id: userId,
-        title: newGoalTitle,
-        target_books: parseInt(newGoalTarget),
-        deadline: newGoalDeadline || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast({ title: "Erro ao criar meta", variant: "destructive" });
-      return;
-    }
-
-    setGoals([data as ReadingGoal, ...goals]);
+    const { goal } = await api.createGoal(
+      { title: newGoalTitle, target_books: parseInt(newGoalTarget), deadline: newGoalDeadline || null },
+      token
+    );
+    setGoals([goal as ReadingGoal, ...goals]);
     setNewGoalTitle("");
     setNewGoalTarget("");
     setNewGoalDeadline("");
@@ -346,15 +270,11 @@ const Profile = () => {
   };
 
   const handleDeleteGoal = async (goalId: string) => {
-    const { error } = await supabase
-      .from("reading_goals")
-      .delete()
-      .eq("id", goalId);
-
-    if (error) {
+    if (!token) {
       toast({ title: "Erro ao deletar meta", variant: "destructive" });
       return;
     }
+    await api.deleteGoal(goalId, token);
 
     setGoals(goals.filter((g) => g.id !== goalId));
     toast({ title: "Meta deletada!" });
@@ -368,18 +288,15 @@ const Profile = () => {
       ? Math.min(goal.current_books + 1, goal.target_books)
       : Math.max(goal.current_books - 1, 0);
 
-    const { error } = await supabase
-      .from("reading_goals")
-      .update({
-        current_books: newCurrent,
-        completed: newCurrent >= goal.target_books,
-      })
-      .eq("id", goalId);
-
-    if (error) {
+    if (!token) {
       toast({ title: "Erro ao atualizar meta", variant: "destructive" });
       return;
     }
+    await api.updateGoal(
+      goalId,
+      { current_books: newCurrent, completed: newCurrent >= goal.target_books },
+      token
+    );
 
     setGoals(
       goals.map((g) =>
