@@ -47,6 +47,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isLoggedIn = authType !== null;
   const bookLimit = authType === "guest" ? 7 : Infinity;
 
+  const getDisplayNameFromUser = (currentUser: User | null): string => {
+    if (!currentUser) return "Usuário";
+    const fullName = currentUser.user_metadata?.full_name;
+    if (typeof fullName === "string" && fullName.trim()) return fullName.trim();
+    const emailName = currentUser.email?.split("@")[0];
+    if (emailName && emailName.trim()) return emailName.trim();
+    return "Usuário";
+  };
+
   // Inicializa a autenticação do Supabase
   useEffect(() => {
     // Configura primeiro o listener de estado de autenticação
@@ -59,9 +68,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
           setUserId(currentSession.user.id);
           setAuthType("email");
+          setUsername(getDisplayNameFromUser(currentSession.user));
 
           setTimeout(() => {
-            loadProfile(currentSession.user.id);
+            loadProfile(currentSession.user.id, currentSession.user);
           }, 0);
         } else {
           setUserId(null);
@@ -89,7 +99,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
         setUserId(currentSession.user.id);
         setAuthType("email");
-        loadProfile(currentSession.user.id);
+        setUsername(getDisplayNameFromUser(currentSession.user));
+        loadProfile(currentSession.user.id, currentSession.user);
       } else if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
         setUserId(null);
         setAuthType("guest");
@@ -114,17 +125,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [theme]);
 
   // Carrega perfil do Supabase
-  const loadProfile = async (userIdToLoad: string) => {
+  const loadProfile = async (userIdToLoad: string, currentUser?: User | null) => {
     const { data: profileData } = await supabase
       .from("profiles")
       .select("*")
       .eq("user_id", userIdToLoad)
       .maybeSingle();
 
+    const fallbackName = getDisplayNameFromUser(currentUser ?? user);
+
     if (profileData) {
-      setUsername(profileData.username || "Usuário");
+      const resolvedName = profileData.username || fallbackName;
+      setUsername(resolvedName);
       setAvatarImage(profileData.avatar_image || "");
       setBannerImage(profileData.banner_image || "");
+
+      if (!profileData.username && fallbackName !== "Usuário") {
+        await supabase
+          .from("profiles")
+          .update({ username: fallbackName })
+          .eq("user_id", userIdToLoad);
+      }
+    } else {
+      setUsername(fallbackName);
+      if (fallbackName !== "Usuário") {
+        await supabase.from("profiles").upsert(
+          { user_id: userIdToLoad, username: fallbackName },
+          { onConflict: "user_id" }
+        );
+      }
     }
 
     // Carrega configurações de tema

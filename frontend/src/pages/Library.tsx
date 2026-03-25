@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import BookCard from "@/components/BookCard";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 const Library = () => {
   const [activeTab, setActiveTab] = useState<"favoritos" | "lendo" | "lidos">("favoritos");
@@ -22,12 +22,11 @@ const Library = () => {
   useEffect(() => {
     const loadBooks = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('books')
-        .select('*');
-      
-      if (!error && data) {
-        setBooks(data);
+      try {
+        const response = await api.getBooks();
+        if (response?.books) setBooks(response.books);
+      } catch {
+        // mantém fallback silencioso para não quebrar interface
       }
       setLoading(false);
     };

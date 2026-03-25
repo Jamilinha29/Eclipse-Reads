@@ -18,6 +18,10 @@ const Settings = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const { toast } = useToast();
 
+  useEffect(() => {
+    setLocalUsername(username);
+  }, [username]);
+
   // Carrega configurações do Supabase
   useEffect(() => {
     const loadSettings = async () => {

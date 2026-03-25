@@ -6,9 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import { ReviewSection } from "@/components/ReviewSection";
+import { api } from "@/lib/api";
 
 interface Book {
   id: string;
@@ -39,23 +39,20 @@ const BookDetail = () => {
   useEffect(() => {
     const loadBook = async () => {
       if (!id) return;
-      
-      const { data, error } = await supabase
-        .from("books")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (error) {
+      try {
+        const response = await api.getBook(id);
+        const data = response?.book;
+        if (!data) {
+          toast.error("Livro não encontrado");
+        } else {
+          setBook(data);
+        }
+      } catch (error) {
         console.error("Error loading book:", error);
         toast.error("Erro ao carregar livro");
-      } else if (!data) {
-        toast.error("Livro não encontrado");
-      } else {
-        setBook(data);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     loadBook();

@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 interface Book {
   id: string;
@@ -19,6 +19,19 @@ interface Book {
   cover_image: string | null;
   rating: number;
 }
+
+const normalizeText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const parseCategories = (categoryRaw: string) =>
+  categoryRaw
+    .split(/[;,/|]/)
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
 
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,14 +62,8 @@ const Search = () => {
 
   useEffect(() => {
     const loadBooks = async () => {
-      const { data } = await supabase
-        .from("books")
-        .select("id, title, author, category, cover_image, rating")
-        .order("created_at", { ascending: false });
-      
-      if (data) {
-        setBooks(data);
-      }
+      const response = await api.getBooks();
+      if (response?.books) setBooks(response.books);
     };
 
     loadBooks();
@@ -67,9 +74,11 @@ const Search = () => {
       book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       book.author.toLowerCase().includes(searchQuery.toLowerCase());
     
+    const selectedGenreNormalized = normalizeText(selectedGenre);
+    const categories = parseCategories(book.category || "");
     const matchesGenre =
       selectedGenre === "Todos os Gêneros" ||
-      book.category.toLowerCase() === selectedGenre.toLowerCase();
+      categories.includes(selectedGenreNormalized);
     
     return matchesSearch && matchesGenre;
   });

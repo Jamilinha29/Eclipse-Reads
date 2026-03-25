@@ -416,6 +416,4 @@ export default function () {
 - [Supertest GitHub](https://github.com/visionmedia/supertest)
 - [Mocking com Vitest](https://vitest.dev/guide/mocking.html)
 
----
 
-**Desenvolvido para Eclipse Reads** 🌙📚

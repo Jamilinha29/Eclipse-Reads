@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
+import { api } from "@/lib/api";
 
 interface Book {
   id: number;
@@ -34,7 +34,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [reading, setReading] = useState<string[]>([]);
   const [read, setRead] = useState<string[]>([]);
-  const { userId, authType } = useAuth();
+  const { userId, authType, session } = useAuth();
 
   // Carrega dados do localStorage para convidados ou do Supabase para usuários logados
   useEffect(() => {
@@ -52,20 +52,22 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!userId) return;
+      const token = session?.access_token;
+      if (!token) return;
 
       const [favData, readingData, readData] = await Promise.all([
-        supabase.from("favorites").select("book_id").eq("user_id", userId),
-        supabase.from("reading").select("book_id").eq("user_id", userId),
-        supabase.from("read").select("book_id").eq("user_id", userId),
+        api.getLibrary("favoritos", token),
+        api.getLibrary("lendo", token),
+        api.getLibrary("lidos", token),
       ]);
 
-      if (favData.data) setFavorites(favData.data.map((d) => d.book_id));
-      if (readingData.data) setReading(readingData.data.map((d) => d.book_id));
-      if (readData.data) setRead(readData.data.map((d) => d.book_id));
+      if (favData?.books) setFavorites(favData.books.map((d: any) => d.id));
+      if (readingData?.books) setReading(readingData.books.map((d: any) => d.id));
+      if (readData?.books) setRead(readData.books.map((d: any) => d.id));
     };
 
     loadLibrary();
-  }, [userId, authType]);
+  }, [userId, authType, session?.access_token]);
 
   // Salva no localStorage para usuários convidados
   useEffect(() => {
@@ -83,7 +85,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
     if (maxBooks && getTotalBooks() >= maxBooks) return false;
     
     if (userId && authType !== "guest") {
-      await supabase.from("favorites").insert({ user_id: userId, book_id: bookId });
+      const token = session?.access_token;
+      if (token) await api.addToLibrary("favoritos", bookId, token);
     }
     
     setFavorites((prev) => [...prev, bookId]);
@@ -92,7 +95,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
 
   const removeFromFavorites = async (bookId: string) => {
     if (userId && authType !== "guest") {
-      await supabase.from("favorites").delete().eq("user_id", userId).eq("book_id", bookId);
+      const token = session?.access_token;
+      if (token) await api.removeFromLibrary("favoritos", bookId, token);
     }
     
     setFavorites((prev) => prev.filter((id) => id !== bookId));
@@ -108,7 +112,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
     }
     
     if (userId && authType !== "guest") {
-      await supabase.from("reading").insert({ user_id: userId, book_id: bookId });
+      const token = session?.access_token;
+      if (token) await api.addToLibrary("lendo", bookId, token);
     }
     
     setReading((prev) => [...prev, bookId]);
@@ -117,7 +122,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
 
   const removeFromReading = async (bookId: string) => {
     if (userId && authType !== "guest") {
-      await supabase.from("reading").delete().eq("user_id", userId).eq("book_id", bookId);
+      const token = session?.access_token;
+      if (token) await api.removeFromLibrary("lendo", bookId, token);
     }
     
     setReading((prev) => prev.filter((id) => id !== bookId));
@@ -138,7 +144,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
     }
     
     if (userId && authType !== "guest") {
-      await supabase.from("read").insert({ user_id: userId, book_id: bookId });
+      const token = session?.access_token;
+      if (token) await api.addToLibrary("lidos", bookId, token);
     }
     
     setRead((prev) => [...prev, bookId]);
@@ -147,7 +154,8 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
 
   const removeFromRead = async (bookId: string) => {
     if (userId && authType !== "guest") {
-      await supabase.from("read").delete().eq("user_id", userId).eq("book_id", bookId);
+      const token = session?.access_token;
+      if (token) await api.removeFromLibrary("lidos", bookId, token);
     }
     
     setRead((prev) => prev.filter((id) => id !== bookId));

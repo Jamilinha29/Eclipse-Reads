@@ -11,6 +11,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { createClient } from "@supabase/supabase-js";
+import { Readable } from "stream";
 
 const app = express();
 
@@ -68,6 +69,74 @@ app.get("/books/:id", async (req: Request, res: Response) => {
     const { data, error } = await supabase.from("books").select("*").eq("id", id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ book: data });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message ?? String(err) });
+  }
+});
+
+// GET /books/:id/file -> faz proxy do arquivo do livro pelo backend
+app.get("/books/:id/file", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    const id = req.params.id;
+    const { data: book, error: bookError } = await supabase
+      .from("books")
+      .select("file_path, file_type, title")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (bookError) return res.status(500).json({ error: bookError.message });
+    if (!book?.file_path) return res.status(404).json({ error: "Book file not found" });
+
+    const { data: fileData, error: fileError } = await supabase.storage
+      .from("books")
+      .download(book.file_path);
+
+    if (fileError) return res.status(500).json({ error: fileError.message });
+
+    const fileType = (book.file_type || "").toLowerCase();
+    const contentType =
+      fileType === "pdf"
+        ? "application/pdf"
+        : fileType === "epub"
+          ? "application/epub+zip"
+          : fileType === "mobi"
+            ? "application/x-mobipocket-ebook"
+            : "application/octet-stream";
+
+    const extension = fileType || "bin";
+    const safeTitle = (book.title || "book").replace(/[^a-zA-Z0-9-_]/g, "_");
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `inline; filename="${safeTitle}.${extension}"`);
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    Readable.from(Buffer.from(arrayBuffer)).pipe(res);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message ?? String(err) });
+  }
+});
+
+// GET /quotes/today -> retorna frase fixa do dia
+app.get("/quotes/today", async (_req: Request, res: Response) => {
+  requests++;
+  try {
+    const { data, error } = await supabase
+      .from("quotes")
+      .select("id, quote, author, category")
+      .eq("is_active", true)
+      .order("id", { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data || data.length === 0) return res.json({ quote: null });
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const diff = now.getTime() - start.getTime();
+    const oneDay = 1000 * 60 * 60 * 24;
+    const dayOfYear = Math.floor(diff / oneDay);
+    const index = dayOfYear % data.length;
+
+    return res.json({ quote: data[index] });
   } catch (err: any) {
     return res.status(500).json({ error: err.message ?? String(err) });
   }

@@ -8,12 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, AUTH_REMEMBER_ME_KEY } from "@/integrations/supabase/client";
 import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
+import { UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 const Auth = () => {
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,18 +22,16 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const { setAuthType, setUserId, isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const authClient = supabase.auth as any;
+  const GoogleIcon = () => (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M21.35 11.1H12v2.98h5.37c-.24 1.52-1.85 4.47-5.37 4.47-3.23 0-5.87-2.68-5.87-5.98S8.77 6.6 12 6.6c1.84 0 3.08.79 3.79 1.47l2.58-2.5C16.73 4.07 14.56 3 12 3 6.93 3 2.82 7.13 2.82 12.2S6.93 21.4 12 21.4c6.93 0 9.18-4.87 9.18-7.39 0-.5-.05-.86-.12-1.2l.29-1.71z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 
-  // Verifica se o usuário é admin
-  const checkIsAdmin = async (userId: string): Promise<boolean> => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    
-    return !!data;
-  };
 
   // Redireciona se já estiver logado
   useEffect(() => {
@@ -42,6 +41,7 @@ const Auth = () => {
   }, [isLoggedIn, navigate]);
 
   const handleGuestLogin = () => {
+    localStorage.removeItem(AUTH_REMEMBER_ME_KEY);
     localStorage.setItem(GUEST_AUTH_FLAG_KEY, "guest");
     setAuthType("guest");
     setUserId(null);
@@ -55,11 +55,11 @@ const Auth = () => {
       return;
     }
 
+    localStorage.setItem(AUTH_REMEMBER_ME_KEY, String(rememberMe));
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = authClient.signInWithPassword
+      ? await authClient.signInWithPassword({ email, password })
+      : await authClient.signIn({ email, password });
 
     setLoading(false);
 
@@ -98,7 +98,7 @@ const Auth = () => {
     setLoading(true);
     const redirectUrl = `${window.location.origin}/`;
 
-    const { error } = await supabase.auth.signUp({
+    const { error } = await authClient.signUp({
       email,
       password,
       options: {
@@ -126,12 +126,13 @@ const Auth = () => {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth-callback`,
-      },
-    });
+    const redirectTo = `${window.location.origin}/auth-callback`;
+    const { error } = authClient.signInWithOAuth
+      ? await authClient.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo },
+        })
+      : await authClient.signIn({ provider: "google" }, { redirectTo });
 
     setLoading(false);
 
@@ -237,10 +238,12 @@ const Auth = () => {
                     <span className="bg-card px-2 text-muted-foreground">OU</span>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full h-11" type="button" onClick={handleGoogleLogin} disabled={loading}>
+                <Button variant="outline" className="w-full h-11 gap-2" type="button" onClick={handleGoogleLogin} disabled={loading}>
+                  <GoogleIcon />
                   {loading ? "Carregando..." : "Continuar com Google"}
                 </Button>
-                <Button variant="outline" className="w-full h-11" type="button" onClick={handleGuestLogin} disabled={loading}>
+                <Button variant="outline" className="w-full h-11 gap-2" type="button" onClick={handleGuestLogin} disabled={loading}>
+                  <UserRound className="h-4 w-4" />
                   Entrar como Convidado
                 </Button>
               </form>
@@ -314,10 +317,12 @@ const Auth = () => {
                     <span className="bg-card px-2 text-muted-foreground">OU</span>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full h-11" type="button" onClick={handleGoogleLogin} disabled={loading}>
+                <Button variant="outline" className="w-full h-11 gap-2" type="button" onClick={handleGoogleLogin} disabled={loading}>
+                  <GoogleIcon />
                   {loading ? "Carregando..." : "Continuar com Google"}
                 </Button>
-                <Button variant="outline" className="w-full h-11" type="button" onClick={handleGuestLogin} disabled={loading}>
+                <Button variant="outline" className="w-full h-11 gap-2" type="button" onClick={handleGuestLogin} disabled={loading}>
+                  <UserRound className="h-4 w-4" />
                   Entrar como Convidado
                 </Button>
               </form>

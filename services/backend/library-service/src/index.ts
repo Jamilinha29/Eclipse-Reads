@@ -74,6 +74,70 @@ app.get("/library", async (req: Request, res: Response) => {
   }
 });
 
+const resolveTable = (type?: string) => {
+  if (type === "lendo") return "reading";
+  if (type === "lidos") return "read";
+  return "favorites";
+};
+
+const getAuthenticatedUserId = async (authHeader: string) => {
+  const clientWithHeader = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } }
+  });
+  const { data: userData, error: userErr } = await clientWithHeader.auth.getUser();
+  if (userErr || !userData.user) return null;
+  return userData.user.id;
+};
+
+// POST /library/:type -> adiciona livro na lista do usuário
+app.post("/library/:type", async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.header("authorization") ?? "";
+    if (!authHeader) return res.status(401).json({ error: "missing authorization header" });
+
+    const userId = await getAuthenticatedUserId(authHeader);
+    if (!userId) return res.status(401).json({ error: "not authenticated" });
+
+    const tableName = resolveTable(req.params.type);
+    const bookId = req.body?.book_id;
+    if (!bookId) return res.status(400).json({ error: "book_id is required" });
+
+    const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { error } = await svc.from(tableName).upsert(
+      { user_id: userId, book_id: bookId },
+      { onConflict: "user_id,book_id" }
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message ?? String(err) });
+  }
+});
+
+// DELETE /library/:type/:bookId -> remove livro da lista do usuário
+app.delete("/library/:type/:bookId", async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.header("authorization") ?? "";
+    if (!authHeader) return res.status(401).json({ error: "missing authorization header" });
+
+    const userId = await getAuthenticatedUserId(authHeader);
+    if (!userId) return res.status(401).json({ error: "not authenticated" });
+
+    const tableName = resolveTable(req.params.type);
+    const bookId = req.params.bookId;
+    if (!bookId) return res.status(400).json({ error: "book_id is required" });
+
+    const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { error } = await svc.from(tableName).delete().eq("user_id", userId).eq("book_id", bookId);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message ?? String(err) });
+  }
+});
+
 const PORT = Number(process.env.PORT ?? 4200);
 if (NODE_ENV !== "test") {
   app.listen(PORT, () => console.log(`library-service listening on ${PORT}`));

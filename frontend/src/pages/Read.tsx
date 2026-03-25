@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { BookViewer } from "@/components/BookViewer";
+import { api } from "@/lib/api";
 
 interface Book {
   id: string;
@@ -30,13 +31,12 @@ const Read = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { userId, bookLimit } = useAuth();
-  const { addToReading } = useLibrary();
+  const { addToReading, isInRead, toggleRead } = useLibrary();
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [fileUrl, setFileUrl] = useState<string>("");
-  const [isBookmarked, setIsBookmarked] = useState(false);
   /** Zoom da folha do PDF (1 = 100%; afeta apenas PDF). */
   const [pdfZoom, setPdfZoom] = useState(1);
   const [readingMode, setReadingMode] = useState<"horizontal" | "vertical">("horizontal");
@@ -47,38 +47,27 @@ const Read = () => {
   useEffect(() => {
     const loadBook = async () => {
       if (!id) return;
-      
-      const { data, error } = await supabase
-        .from("books")
-        .select("id, title, author, file_path, file_type")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (error) {
+      try {
+        const response = await api.getBook(id);
+        const data = response?.book;
+        if (!data) {
+          toast.error("Livro não encontrado");
+          navigate("/");
+          return;
+        }
+        setBook(data);
+        const addedToReading = await addToReading(id, bookLimit);
+        if (!addedToReading) {
+          toast.error("Limite atingido! Faça login para adicionar mais livros.");
+        }
+        setFileUrl(api.getBookFileUrl(id));
+      } catch (error) {
         console.error("Error loading book:", error);
         toast.error("Erro ao carregar livro");
         navigate("/");
-      } else if (!data) {
-        toast.error("Livro não encontrado");
-        navigate("/");
-      } else {
-        setBook(data);
-        
-        // Adiciona automaticamente a tag "lendo" quando abrir o livro
-        await addToReading(id, bookLimit);
-        
-        if (data.file_path) {
-          const { data: urlData } = supabase.storage
-            .from('books')
-            .getPublicUrl(data.file_path);
-          
-          if (urlData) {
-            setFileUrl(urlData.publicUrl);
-          }
-        }
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     loadBook();
@@ -127,9 +116,18 @@ const Read = () => {
     return () => clearTimeout(debounceTimer);
   }, [currentPage, userId, id, totalPages]);
 
-  const handleToggleBookmark = async () => {
-    setIsBookmarked(!isBookmarked);
-    toast.success(isBookmarked ? "Marcador removido" : "Página marcada");
+  const handleToggleRead = async () => {
+    if (!id) return;
+
+    const currentlyInRead = isInRead(id);
+    const success = await toggleRead(id, bookLimit);
+
+    if (!success) {
+      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      return;
+    }
+
+    toast.success(currentlyInRead ? "Removido de lidos" : "Marcado como lido");
   };
 
   const handleNextPage = () => {
@@ -209,21 +207,23 @@ const Read = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleBookmark}
-              className="gap-2"
-            >
-              {isBookmarked ? (
-                <BookmarkCheck className="h-4 w-4" />
-              ) : (
-                <Bookmark className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">
-                {isBookmarked ? "Marcado" : "Marcar"}
-              </span>
-            </Button>
+            {readingMode === "horizontal" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleRead}
+                className="gap-2"
+              >
+                {id && isInRead(id) ? (
+                  <BookmarkCheck className="h-4 w-4" />
+                ) : (
+                  <Bookmark className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {id && isInRead(id) ? "Lido" : "Marcar como lido"}
+                </span>
+              </Button>
+            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

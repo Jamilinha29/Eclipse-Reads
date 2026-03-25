@@ -1,11 +1,11 @@
-import { ArrowRight, Sparkles, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Sparkles, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import BookCard from "@/components/BookCard";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 interface Quote {
   id: string;
@@ -25,45 +25,25 @@ interface Book {
 
 const Home = () => {
   const { isLoggedIn, authType, username, theme } = useAuth();
-  const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+  const [dailyQuote, setDailyQuote] = useState<Quote | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
 
   useEffect(() => {
     const loadQuotes = async () => {
-      const { data } = await supabase
-        .from("quotes")
-        .select("*")
-        .eq("is_active", true);
-      
-      if (data && data.length > 0) {
-        setQuotes(data);
-      }
+      const response = await api.getQuoteOfDay();
+      setDailyQuote(response?.quote ?? null);
     };
 
     const loadBooks = async () => {
-      const { data } = await supabase
-        .from("books")
-        .select("id, title, author, category, cover_image, rating")
-        .order("created_at", { ascending: false })
-        .limit(12);
-      
-      if (data) {
-        setBooks(data);
+      const response = await api.getBooks();
+      if (response?.books) {
+        setBooks(response.books.slice(0, 12));
       }
     };
 
     loadQuotes();
     loadBooks();
   }, []);
-
-  const handlePrevQuote = () => {
-    setCurrentQuoteIndex((prev) => (prev === 0 ? quotes.length - 1 : prev - 1));
-  };
-
-  const handleNextQuote = () => {
-    setCurrentQuoteIndex((prev) => (prev === quotes.length - 1 ? 0 : prev + 1));
-  };
 
   return (
     <div className="min-h-screen pb-8">
@@ -97,7 +77,7 @@ const Home = () => {
           </Card>
         )}
 
-        {isLoggedIn && (authType === "email" || authType === "google") && quotes.length > 0 && (
+        {isLoggedIn && (authType === "email" || authType === "google") && dailyQuote && (
           <Card className={`mt-6 relative overflow-hidden border-0 shadow-glow ${
             theme === "light" 
               ? "bg-gradient-to-br from-slate-400 to-slate-500 text-slate-900" 
@@ -107,45 +87,6 @@ const Home = () => {
               <BookOpen className={`h-6 w-6 ${theme === "light" ? "text-slate-700" : "text-primary-foreground/80"}`} />
             </div>
             
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 ${
-                  theme === "light" 
-                    ? "text-slate-700 hover:text-slate-900 hover:bg-slate-300/50" 
-                    : "text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
-                }`}
-                onClick={handlePrevQuote}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex gap-1">
-                {quotes.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`h-2 w-2 rounded-full transition-smooth ${
-                      index === currentQuoteIndex 
-                        ? theme === "light" ? "bg-slate-900" : "bg-primary-foreground"
-                        : theme === "light" ? "bg-slate-900/30" : "bg-primary-foreground/30"
-                    }`}
-                  />
-                ))}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 ${
-                  theme === "light" 
-                    ? "text-slate-700 hover:text-slate-900 hover:bg-slate-300/50" 
-                    : "text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
-                }`}
-                onClick={handleNextQuote}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            </div>
-
             <div className="pt-16 pb-8 px-8 text-center">
               <h3 className={`text-sm font-semibold mb-4 ${
                 theme === "light" ? "text-slate-800" : "text-primary-foreground/90"
@@ -155,12 +96,12 @@ const Home = () => {
               <p className={`text-lg italic mb-4 max-w-2xl mx-auto leading-relaxed ${
                 theme === "light" ? "text-slate-900" : "text-primary-foreground"
               }`}>
-                "{quotes[currentQuoteIndex]?.quote}"
+                "{dailyQuote.quote}"
               </p>
               <p className={`text-sm font-medium ${
                 theme === "light" ? "text-slate-700" : "text-primary-foreground/80"
               }`}>
-                — {quotes[currentQuoteIndex]?.author}
+                — {dailyQuote.author}
               </p>
             </div>
           </Card>
