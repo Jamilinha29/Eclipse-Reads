@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toastNeedLogin } from "@/lib/loginToast";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ const BookCard = ({ id, title, author, image, rating }: BookCardProps) => {
     e.stopPropagation();
     const success = await toggleFavorite(id, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 
@@ -45,7 +45,7 @@ const BookCard = ({ id, title, author, image, rating }: BookCardProps) => {
     e.stopPropagation();
     const success = await toggleReading(id, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 
@@ -53,7 +53,7 @@ const BookCard = ({ id, title, author, image, rating }: BookCardProps) => {
     e.stopPropagation();
     const success = await toggleRead(id, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 

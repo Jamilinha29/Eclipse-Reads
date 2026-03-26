@@ -12,9 +12,10 @@
     "@types/morgan": "^1.9.10",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "eclipse-reads": "file:../../..",
     "express": "^4.18.2",
-    "multer": "^2.0.2",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",

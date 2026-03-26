@@ -57,9 +57,27 @@ const Settings = () => {
     }
   }, [theme, soundEnabled, notificationsEnabled, userId, token]);
 
-  const handleSaveUsername = () => {
-    setUsername(localUsername);
-    toast({ title: "Nome de usuário salvo!" });
+  const handleSaveUsername = async () => {
+    const name = localUsername.trim();
+    if (!name) {
+      toast({ title: "Digite um nome válido", variant: "destructive" });
+      return;
+    }
+    if (!userId || !token) {
+      toast({ title: "Faça login com e-mail ou Google para salvar o nome", variant: "destructive" });
+      return;
+    }
+    try {
+      await api.updateMeProfile({ username: name }, token);
+      setUsername(name);
+      toast({ title: "Nome de usuário salvo!" });
+    } catch (e) {
+      toast({
+        title: "Erro ao salvar",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    }
   };
 
   const handleThemeChange = (newTheme: "light" | "dark") => {

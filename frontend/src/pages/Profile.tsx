@@ -8,16 +8,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  PROFILE_MEDIA_BUCKET,
-  PROFILE_IMAGE_UPLOAD_OPTIONS,
-  removePreviousProfileObject,
   readImageFileAsDataUrl,
   GUEST_AVATAR_KEY,
   GUEST_BANNER_KEY,
 } from "@/integrations/supabase/profileMediaStorage";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
-import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface ReadingGoal {
   id: string;
@@ -29,6 +26,7 @@ interface ReadingGoal {
 }
 
 const Profile = () => {
+  const navigate = useNavigate();
   const { favorites, reading, read } = useLibrary();
   const { isLoggedIn, authType, avatarImage, setAvatarImage, bannerImage, setBannerImage, username, userId, token } = useAuth();
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -130,33 +128,9 @@ const Profile = () => {
 
     if (!userId) return;
 
-    const objectPath = `${userId}/avatar`;
-
     try {
-      const { profile: currentProfile } = token ? await api.getMeProfile(token) : { profile: null };
-
-      await removePreviousProfileObject(currentProfile?.avatar_image, objectPath);
-
-      const { error: uploadError } = await supabase.storage
-        .from(PROFILE_MEDIA_BUCKET)
-        .upload(objectPath, file, {
-          ...PROFILE_IMAGE_UPLOAD_OPTIONS,
-          contentType: file.type || undefined,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
-
-      if (token) {
-        await api.updateMeProfile(
-          { avatar_image: publicUrl, banner_image: currentProfile?.banner_image ?? undefined, username },
-          token
-        );
-      }
-
+      if (!token) return;
+      const { publicUrl } = await api.uploadProfileMedia("avatar", file, token);
       setAvatarImage(`${publicUrl}?t=${Date.now()}`);
 
       toast({
@@ -204,33 +178,9 @@ const Profile = () => {
 
     if (!userId) return;
 
-    const objectPath = `${userId}/banner`;
-
     try {
-      const { profile: currentProfile } = token ? await api.getMeProfile(token) : { profile: null };
-
-      await removePreviousProfileObject(currentProfile?.banner_image, objectPath);
-
-      const { error: uploadError } = await supabase.storage
-        .from(PROFILE_MEDIA_BUCKET)
-        .upload(objectPath, file, {
-          ...PROFILE_IMAGE_UPLOAD_OPTIONS,
-          contentType: file.type || undefined,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
-
-      if (token) {
-        await api.updateMeProfile(
-          { banner_image: publicUrl, avatar_image: currentProfile?.avatar_image ?? undefined, username },
-          token
-        );
-      }
-
+      if (!token) return;
+      const { publicUrl } = await api.uploadProfileMedia("banner", file, token);
       setBannerImage(`${publicUrl}?t=${Date.now()}`);
 
       toast({
@@ -374,7 +324,7 @@ const Profile = () => {
               <Award className="h-8 w-8" />
               <h3 className="text-xl font-bold">Libere todos os livros!</h3>
               <p className="text-sm opacity-90">Faça login e tenha acesso ilimitado a variados recursos</p>
-              <Button variant="secondary" className="mt-2" onClick={() => window.location.href = '/auth'}>
+              <Button variant="secondary" className="mt-2" onClick={() => navigate("/auth")}>
                 Fazer Login
               </Button>
             </div>

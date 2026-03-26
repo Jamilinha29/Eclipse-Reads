@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { toastNeedLogin } from "@/lib/loginToast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { BookViewer } from "@/components/BookViewer";
@@ -57,7 +58,7 @@ const Read = () => {
         setBook(data);
         const addedToReading = await addToReading(id, bookLimit);
         if (!addedToReading) {
-          toast.error("Limite atingido! Faça login para adicionar mais livros.");
+          toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
         }
         setFileUrl(api.getBookFileUrl(id));
       } catch (error) {
@@ -114,7 +115,7 @@ const Read = () => {
     const success = await toggleRead(id, bookLimit);
 
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
       return;
     }
 

@@ -3,7 +3,9 @@ import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { toastNeedLogin } from "@/lib/loginToast";
 // (não usamos o api.ts aqui porque ele ainda não expõe reviews)
 
 interface Review {
@@ -15,6 +17,7 @@ interface Review {
 }
 
 export const ReviewSection = ({ bookId }: { bookId: string }) => {
+  const navigate = useNavigate();
   const { userId, token } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [userRating, setUserRating] = useState(0);
@@ -34,7 +37,7 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
 
   const handleSubmit = async () => {
     if (!userId || !token) {
-      toast.error("Faça login para avaliar");
+      toastNeedLogin("Faça login para avaliar", navigate);
       return;
     }
 

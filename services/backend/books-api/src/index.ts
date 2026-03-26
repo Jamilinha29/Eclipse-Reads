@@ -15,6 +15,7 @@ import { Readable } from "stream";
 import multer from "multer";
 
 const app = express();
+app.disable("x-powered-by");
 
 // Middleware configuration
 app.use(express.json({ limit: '10mb' })); // Limite para uploads de arquivos
@@ -22,9 +23,16 @@ app.use(morgan("dev"));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://seu-dominio.com'] 
-    : ['http://localhost:3000', 'http://localhost:5173'], // Vite e Create React App
+    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'],
   credentials: true
 }));
+app.use((_req: Request, res: Response, next) => {
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 
 // ENV with validation
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
@@ -43,6 +51,11 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });
 
+const uploadCover = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
+
 async function requireUser(req: Request): Promise<{ id: string; email?: string | null }> {
   const auth = req.header("authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
@@ -56,6 +69,23 @@ async function requireUser(req: Request): Promise<{ id: string; email?: string |
   const { data, error } = await clientWithAuth.auth.getUser();
   if (error || !data?.user?.id) throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
   return { id: data.user.id, email: data.user.email };
+}
+
+async function requireAdmin(req: Request): Promise<{ id: string }> {
+  const user = await requireUser(req);
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  if (error) throw Object.assign(new Error(error.message), { statusCode: 500 });
+
+  const roles = (data ?? [])
+    .map((row: any) => (typeof row?.role === "string" ? row.role.trim().toLowerCase() : ""))
+    .filter(Boolean);
+  const isAdmin = roles.includes("admin") || roles.includes("adm");
+
+  if (!isAdmin) throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+  return user;
 }
 
 // Health
@@ -74,7 +104,10 @@ app.get("/metrics", (_req: Request, res: Response) => {
 app.get("/books", async (_req: Request, res: Response) => {
   requests++;
   try {
-    const { data, error } = await supabase.from("books").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("books")
+      .select("id, title, author, category, cover_image, rating, age_rating, created_at")
+      .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ books: data });
   } catch (err: any) {
@@ -87,7 +120,11 @@ app.get("/books/:id", async (req: Request, res: Response) => {
   requests++;
   try {
     const id = req.params.id;
-    const { data, error } = await supabase.from("books").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await supabase
+      .from("books")
+      .select("id, title, author, description, category, cover_image, rating, file_type, created_at, age_rating")
+      .eq("id", id)
+      .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ book: data });
   } catch (err: any) {
@@ -256,10 +293,283 @@ app.delete("/submissions/:id", async (req: Request, res: Response) => {
   }
 });
 
-// GET /quotes/today -> retorna frase fixa do dia
-app.get("/quotes/today", async (_req: Request, res: Response) => {
+// --- Admin (exige Bearer + role admin) ---
+app.get("/admin/submissions", async (req: Request, res: Response) => {
   requests++;
   try {
+    await requireAdmin(req);
+    const { data, error } = await supabase
+      .from("book_submissions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ submissions: data ?? [] });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    const admin = await requireAdmin(req);
+    const id = req.params.id;
+    const { data: submission, error: loadErr } = await supabase
+      .from("book_submissions")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (loadErr) return res.status(500).json({ error: loadErr.message });
+    if (!submission) return res.status(404).json({ error: "Not found" });
+    if (submission.status !== "pending") return res.status(400).json({ error: "Submission is not pending" });
+
+    const { error: upErr } = await supabase
+      .from("book_submissions")
+      .update({
+        status: "approved",
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: admin.id,
+      })
+      .eq("id", id);
+    if (upErr) return res.status(500).json({ error: upErr.message });
+
+    const { error: bookErr } = await supabase.from("books").insert({
+      title: submission.title,
+      author: submission.author,
+      description: submission.description,
+      category: submission.category,
+      file_path: submission.file_path,
+      file_type: submission.file_type,
+      submission_id: submission.id,
+    });
+    if (bookErr) return res.status(500).json({ error: bookErr.message });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    const admin = await requireAdmin(req);
+    const id = req.params.id;
+    const rejection_reason = String(req.body?.rejection_reason ?? "").trim();
+    if (!rejection_reason) return res.status(400).json({ error: "rejection_reason is required" });
+
+    const { error } = await supabase
+      .from("book_submissions")
+      .update({
+        status: "rejected",
+        rejection_reason,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: admin.id,
+      })
+      .eq("id", id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.get("/admin/storage/books", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const { data, error } = await supabase.storage.from("books").list("", {
+      limit: 2000,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    const files = (data ?? []).filter(
+      (f) =>
+        f.name &&
+        (f.name.endsWith(".pdf") || f.name.endsWith(".epub") || f.name.endsWith(".mobi"))
+    );
+    return res.json({ files });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.get("/admin/storage/books/download", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const filePath = String(req.query.path ?? "");
+    if (!filePath) return res.status(400).json({ error: "path query required" });
+
+    const { data: fileData, error: fileError } = await supabase.storage.from("books").download(filePath);
+    if (fileError) return res.status(500).json({ error: fileError.message });
+
+    const name = filePath.split("/").pop() || "download";
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${name.replace(/"/g, "")}"`);
+    const arrayBuffer = await fileData.arrayBuffer();
+    Readable.from(Buffer.from(arrayBuffer)).pipe(res);
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.post("/admin/storage/books/cover", uploadCover.single("file"), async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const file = req.file;
+    if (!file || !file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ error: "image file required" });
+    }
+    const baseName = String(req.body?.basename ?? "cover").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const safeExt = ext.length > 0 && ext.length <= 5 ? ext : "jpg";
+    const filePath = `covers/${baseName}-${Date.now()}.${safeExt}`;
+
+    const { error: uploadError } = await supabase.storage.from("books").upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+    if (uploadError) return res.status(500).json({ error: uploadError.message });
+
+    const { data: pub } = supabase.storage.from("books").getPublicUrl(filePath);
+    return res.json({ publicUrl: pub.publicUrl });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.put("/admin/books/:id", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const id = req.params.id;
+    const { title, author, description, category, cover_image, age_rating } = req.body ?? {};
+    const payload: Record<string, unknown> = {};
+    if (typeof title === "string") payload.title = title;
+    if (typeof author === "string") payload.author = author;
+    if (typeof description === "string") payload.description = description;
+    if (typeof category === "string") payload.category = category;
+    if (cover_image === null || typeof cover_image === "string") payload.cover_image = cover_image;
+    if (typeof age_rating === "string") payload.age_rating = age_rating;
+
+    const { data, error } = await supabase.from("books").update(payload).eq("id", id).select("*").maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "Not found" });
+    return res.json({ book: data });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+app.post("/admin/books/import", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const b = req.body ?? {};
+    const title = String(b.title ?? "").trim();
+    const author = String(b.author ?? "").trim();
+    const category = String(b.category ?? "").trim();
+    const file_path = String(b.file_path ?? "").trim();
+    const file_type = String(b.file_type ?? "pdf").trim().toLowerCase();
+    if (!title || !author || !category || !file_path) {
+      return res.status(400).json({ error: "title, author, category, file_path are required" });
+    }
+
+    const releaseYear = b.release_year ? parseInt(String(b.release_year), 10) : new Date().getFullYear();
+    const created_at =
+      Number.isFinite(releaseYear) && releaseYear >= 1800 && releaseYear <= 3000
+        ? new Date(releaseYear, 0, 1).toISOString()
+        : new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("books")
+      .insert({
+        title,
+        author,
+        description: typeof b.description === "string" ? b.description : "",
+        category,
+        cover_image: b.cover_image ?? null,
+        file_path,
+        file_type,
+        age_rating: typeof b.age_rating === "string" ? b.age_rating : "Livre",
+        created_at,
+      })
+      .select("*")
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(201).json({ book: data });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+/** Bucket no Supabase Storage: mensagens em .txt ou .json { "quote", "author?", "category?" } */
+const DAILY_MESSAGES_BUCKET = "mensagem-diaria";
+
+function parseDailyMessageFile(content: string, id: string) {
+  const trimmed = content.trim();
+  try {
+    const j = JSON.parse(trimmed) as Record<string, unknown>;
+    if (j && typeof j.quote === "string") {
+      return {
+        id: String(j.id ?? id),
+        quote: j.quote,
+        author: typeof j.author === "string" ? j.author : null,
+        category: typeof j.category === "string" ? j.category : null,
+      };
+    }
+  } catch {
+    /* texto puro */
+  }
+  return { id, quote: trimmed, author: null, category: null };
+}
+
+function dayOfYearIndex(length: number) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - start.getTime();
+  const oneDay = 1000 * 60 * 60 * 24;
+  const dayOfYear = Math.floor(diff / oneDay);
+  return dayOfYear % length;
+}
+
+// GET /quotes/today?rotate=1 — mensagens no bucket `mensagem-diaria` ou fallback na tabela quotes
+app.get("/quotes/today", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    const rotate =
+      req.query.rotate === "1" ||
+      req.query.rotate === "true" ||
+      req.query.shuffle === "1" ||
+      req.query.shuffle === "true";
+
+    const { data: files, error: listErr } = await supabase.storage
+      .from(DAILY_MESSAGES_BUCKET)
+      .list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
+
+    if (!listErr && files && files.length > 0) {
+      const objs = files.filter((f) => f.name && f.name !== ".emptyFolderPlaceholder");
+      if (objs.length > 0) {
+        const idx = rotate ? Math.floor(Math.random() * objs.length) : dayOfYearIndex(objs.length);
+        const fileName = objs[idx].name;
+        const { data: blob, error: dlErr } = await supabase.storage.from(DAILY_MESSAGES_BUCKET).download(fileName);
+        if (!dlErr && blob) {
+          const text = await blob.text();
+          return res.json({ quote: parseDailyMessageFile(text, fileName) });
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from("quotes")
       .select("id, quote, author, category")
@@ -269,13 +579,7 @@ app.get("/quotes/today", async (_req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     if (!data || data.length === 0) return res.json({ quote: null });
 
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 0);
-    const diff = now.getTime() - start.getTime();
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    const index = dayOfYear % data.length;
-
+    const index = rotate ? Math.floor(Math.random() * data.length) : dayOfYearIndex(data.length);
     return res.json({ quote: data[index] });
   } catch (err: any) {
     return res.status(500).json({ error: err.message ?? String(err) });

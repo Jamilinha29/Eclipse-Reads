@@ -1,13 +1,8 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { supabaseCreateClientMock } from "../mocks/supabaseRegistry";
 
 type SupabaseAuthResult<T = unknown> = Promise<{ data: T | null; error: { message: string } | null }>;
-
-const createClientMock = vi.fn();
-
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: (...args: unknown[]) => createClientMock(...args)
-}));
 
 const loadAuthProxy = async () => {
   vi.resetModules();
@@ -17,18 +12,14 @@ const loadAuthProxy = async () => {
 
 const createAuthClient = (resolver: () => SupabaseAuthResult<{ user: Record<string, unknown> | null }>) => ({
   auth: {
-    getUser: vi.fn().mockImplementation(resolver)
-  }
+    getUser: vi.fn().mockImplementation(resolver),
+  },
 });
 
 const createBaseClient = () => ({
   auth: {
-    getUser: vi.fn()
-  }
-});
-
-beforeEach(() => {
-  createClientMock.mockReset();
+    getUser: vi.fn(),
+  },
 });
 
 describe("auth-proxy fault tolerance", () => {
@@ -38,15 +29,11 @@ describe("auth-proxy fault tolerance", () => {
       Promise.resolve({ data: { user: null }, error: { message: "auth down" } })
     );
 
-    createClientMock
-      .mockReturnValueOnce(baseClient)
-      .mockReturnValueOnce(failingClient);
+    supabaseCreateClientMock.mockReturnValueOnce(baseClient).mockReturnValueOnce(failingClient);
 
     const app = await loadAuthProxy();
 
-    const response = await request(app)
-      .get("/validate")
-      .set("authorization", "Bearer token");
+    const response = await request(app).get("/validate").set("authorization", "Bearer token");
 
     expect(response.status).toBe(401);
     expect(response.body.error).toContain("auth down");
@@ -61,15 +48,11 @@ describe("auth-proxy fault tolerance", () => {
     const baseClient = createBaseClient();
     const rejectingClient = createAuthClient(() => Promise.reject(new Error("supabase offline")));
 
-    createClientMock
-      .mockReturnValueOnce(baseClient)
-      .mockReturnValueOnce(rejectingClient);
+    supabaseCreateClientMock.mockReturnValueOnce(baseClient).mockReturnValueOnce(rejectingClient);
 
     const app = await loadAuthProxy();
 
-    const response = await request(app)
-      .get("/validate")
-      .set("authorization", "Bearer token");
+    const response = await request(app).get("/validate").set("authorization", "Bearer token");
 
     expect(response.status).toBe(500);
     expect(response.body.error).toContain("supabase offline");
@@ -82,17 +65,13 @@ describe("auth-proxy fault tolerance", () => {
   it("retorna 500 quando a criação do cliente falha, sem derrubar o serviço", async () => {
     const baseClient = createBaseClient();
 
-    createClientMock
-      .mockReturnValueOnce(baseClient)
-      .mockImplementationOnce(() => {
-        throw new Error("init failed");
-      });
+    supabaseCreateClientMock.mockReturnValueOnce(baseClient).mockImplementationOnce(() => {
+      throw new Error("init failed");
+    });
 
     const app = await loadAuthProxy();
 
-    const response = await request(app)
-      .get("/validate")
-      .set("authorization", "Bearer token");
+    const response = await request(app).get("/validate").set("authorization", "Bearer token");
 
     expect(response.status).toBe(500);
     expect(response.body.error).toContain("init failed");
@@ -102,5 +81,3 @@ describe("auth-proxy fault tolerance", () => {
     expect(health.body.status).toBe("ok");
   });
 });
-
-

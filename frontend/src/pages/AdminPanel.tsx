@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { ArrowLeft, CheckCircle, XCircle, Shield, Eye, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,128 +67,107 @@ const AdminPanel = () => {
   const [existingBooksData, setExistingBooksData] = useState<Map<string, any>>(new Map());
   const [activeTab, setActiveTab] = useState("submissions");
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { token } = useAuth();
 
-  // Verifica parâmetros da URL para a aba inicial
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
-    if (tab === 'import') {
-      setActiveTab('import');
-      loadStorageFiles();
+  const applyBooksToState = (data: any[]) => {
+    if (!data?.length) {
+      setExistingBooks(new Set());
+      setExistingBooksData(new Map());
+      setBookForms({});
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    loadSubmissions();
-    loadExistingBooks();
-  }, []);
+    setExistingBooks(new Set(data.map((b) => b.file_path)));
+    const booksMap = new Map(data.map((b) => [b.file_path, b]));
+    setExistingBooksData(booksMap);
+    const forms: Record<string, BookForm> = {};
+    data.forEach((book) => {
+      forms[book.file_path] = {
+        title: book.title,
+        author: book.author,
+        description: book.description || "",
+        category: book.category,
+        cover_image: book.cover_image || "",
+        age_rating: book.age_rating || "Livre",
+        release_year: book.created_at ? new Date(book.created_at).getFullYear().toString() : "",
+      };
+    });
+    setBookForms(forms);
+  };
 
   const loadExistingBooks = async () => {
-    const { data } = await supabase
-      .from('books')
-      .select('*');
-    
-    if (data) {
-      setExistingBooks(new Set(data.map(b => b.file_path)));
-      const booksMap = new Map(data.map(b => [b.file_path, b]));
-      setExistingBooksData(booksMap);
-      
-      // Preenche formulários para livros existentes
-      const forms: Record<string, BookForm> = {};
-      data.forEach(book => {
-        forms[book.file_path] = {
-          title: book.title,
-          author: book.author,
-          description: book.description || '',
-          category: book.category,
-          cover_image: book.cover_image || '',
-          age_rating: book.age_rating || 'Livre',
-          release_year: book.created_at ? new Date(book.created_at).getFullYear().toString() : '',
-        };
-      });
-      setBookForms(forms);
-    }
+    const { books } = await api.getBooks();
+    applyBooksToState(books || []);
   };
 
   const loadStorageFiles = async () => {
+    if (!token) return;
     setStorageLoading(true);
-    const { data, error } = await supabase.storage
-      .from('books')
-      .list();
-
-    if (error) {
-      toast.error("Erro ao carregar arquivos do storage");
-      console.error(error);
-    } else {
-      const validFiles = (data || []).filter(file => 
-        file.name.endsWith('.pdf') || 
-        file.name.endsWith('.epub') || 
-        file.name.endsWith('.mobi')
+    try {
+      const { files } = await api.adminListBooksStorage(token);
+      const validFiles = (files || []).filter(
+        (file: StorageFile) =>
+          file.name.endsWith(".pdf") || file.name.endsWith(".epub") || file.name.endsWith(".mobi")
       );
       setStorageFiles(validFiles);
+    } catch (e) {
+      toast.error("Erro ao carregar arquivos do storage");
+      console.error(e);
+    } finally {
+      setStorageLoading(false);
     }
-    setStorageLoading(false);
   };
 
   const loadSubmissions = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('book_submissions')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error("Erro ao carregar submissões");
-      console.error(error);
-    } else {
-      setSubmissions(data || []);
-    }
-    setLoading(false);
+    if (!token) return;
+    const { submissions: data } = await api.adminGetSubmissions(token);
+    setSubmissions(data || []);
   };
 
+  useEffect(() => {
+    // Mantém loading até existir token (sessão Supabase ainda carregando)
+    if (!token) return;
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        await Promise.all([loadSubmissions(), loadExistingBooks()]);
+      } catch (e) {
+        toast.error("Erro ao carregar painel admin");
+        console.error(e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Verifica parâmetros da URL para a aba inicial
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab === "import") {
+      setActiveTab("import");
+      loadStorageFiles();
+    }
+  }, [token]);
+
   const handleApprove = async (submission: BookSubmission) => {
+    if (!token) return;
     setActionLoading(true);
-    
-    // Primeiro, atualiza o status da submissão
-    const { error: submissionError } = await supabase
-      .from('book_submissions')
-      .update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId,
-      })
-      .eq('id', submission.id);
-
-    if (submissionError) {
-      toast.error("Erro ao aprovar submissão");
-      console.error(submissionError);
-      setActionLoading(false);
-      return;
-    }
-
-    // Em seguida, adiciona o livro na tabela de livros
-    const { error: bookError } = await supabase
-      .from('books')
-      .insert({
-        title: submission.title,
-        author: submission.author,
-        description: submission.description,
-        category: submission.category,
-        file_path: submission.file_path,
-        file_type: submission.file_type,
-        submission_id: submission.id,
-      });
-
-    if (bookError) {
-      toast.error("Erro ao adicionar livro à biblioteca");
-      console.error(bookError);
-    } else {
+    try {
+      await api.adminApproveSubmission(submission.id, token);
       toast.success(`Livro "${submission.title}" aprovado e adicionado à biblioteca!`);
-      loadSubmissions();
+      await loadSubmissions();
+    } catch (e) {
+      toast.error("Erro ao aprovar submissão");
+      console.error(e);
+    } finally {
+      setActionLoading(false);
     }
-    
-    setActionLoading(false);
   };
 
   const handleRejectClick = (submission: BookSubmission) => {
@@ -203,31 +182,24 @@ const AdminPanel = () => {
       return;
     }
 
+    if (!token) return;
     setActionLoading(true);
-    const { error } = await supabase
-      .from('book_submissions')
-      .update({
-        status: 'rejected',
-        rejection_reason: rejectionReason,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId,
-      })
-      .eq('id', selectedSubmission.id);
-
-    if (error) {
-      toast.error("Erro ao rejeitar submissão");
-      console.error(error);
-    } else {
+    try {
+      await api.adminRejectSubmission(selectedSubmission.id, rejectionReason.trim(), token);
       toast.success(`Livro "${selectedSubmission.title}" rejeitado`);
-      loadSubmissions();
+      await loadSubmissions();
       setShowRejectDialog(false);
       setSelectedSubmission(null);
+    } catch (e) {
+      toast.error("Erro ao rejeitar submissão");
+      console.error(e);
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive"> = {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       pending: "secondary",
       approved: "default",
       rejected: "destructive",
@@ -245,23 +217,15 @@ const AdminPanel = () => {
   };
 
   const downloadFile = async (filePath: string, fileName: string) => {
-    const { data, error } = await supabase.storage
-      .from('books')
-      .download(filePath);
-
-    if (error) {
-      toast.error("Erro ao baixar arquivo");
+    if (!token) {
+      toast.error("Sessão inválida");
       return;
     }
-
-    const url = URL.createObjectURL(data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      await api.adminDownloadStorageFile(filePath, fileName, token);
+    } catch {
+      toast.error("Erro ao baixar arquivo");
+    }
   };
 
   const handleFormChange = (fileName: string, field: keyof BookForm, value: string) => {
@@ -274,25 +238,20 @@ const AdminPanel = () => {
     }));
   };
 
-  const handleCoverImageUpload = async (fileName: string, file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const filePath = `covers/${fileName.replace(/\.[^/.]+$/, '')}-${Date.now()}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('books')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      toast.error("Erro ao fazer upload da capa");
-      console.error(uploadError);
+  const handleCoverImageUpload = async (bookFileName: string, file: File) => {
+    if (!token) {
+      toast.error("Sessão inválida");
       return null;
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('books')
-      .getPublicUrl(filePath);
-
-    return publicUrl;
+    const basename = bookFileName.replace(/\.[^/.]+$/, "") || "cover";
+    try {
+      const { publicUrl } = await api.adminUploadCover(file, basename, token);
+      return publicUrl as string;
+    } catch (e) {
+      toast.error("Erro ao fazer upload da capa");
+      console.error(e);
+      return null;
+    }
   };
 
   const handleImportBook = async (file: StorageFile) => {
@@ -304,58 +263,55 @@ const AdminPanel = () => {
       return;
     }
 
-    setActionLoading(true);
-    
-    const fileType = file.name.split('.').pop()?.toLowerCase() || 'pdf';
-    
-    if (existingBook) {
-      // Atualiza livro existente
-      const { error } = await supabase
-        .from('books')
-        .update({
-          title: form.title,
-          author: form.author,
-          description: form.description,
-          category: form.category,
-          cover_image: form.cover_image || null,
-          age_rating: form.age_rating || 'Livre',
-        })
-        .eq('id', existingBook.id);
-
-      if (error) {
-        toast.error("Erro ao atualizar livro");
-        console.error(error);
-      } else {
-        toast.success(`Livro "${form.title}" atualizado com sucesso!`);
-        loadExistingBooks();
-      }
-    } else {
-      // Insere novo livro
-      const releaseYear = form.release_year ? parseInt(form.release_year) : new Date().getFullYear();
-      const { error } = await supabase
-        .from('books')
-        .insert({
-          title: form.title,
-          author: form.author,
-          description: form.description,
-          category: form.category,
-          cover_image: form.cover_image || null,
-          file_path: file.name,
-          file_type: fileType,
-          age_rating: form.age_rating || 'Livre',
-          created_at: new Date(releaseYear, 0, 1).toISOString(),
-        });
-
-      if (error) {
-        toast.error("Erro ao adicionar livro");
-        console.error(error);
-      } else {
-        toast.success(`Livro "${form.title}" adicionado com sucesso!`);
-        loadExistingBooks();
-      }
+    if (!token) {
+      toast.error("Sessão inválida");
+      return;
     }
-    
-    setActionLoading(false);
+
+    setActionLoading(true);
+
+    const fileType = file.name.split(".").pop()?.toLowerCase() || "pdf";
+
+    try {
+      if (existingBook) {
+        await api.adminUpdateBook(
+          existingBook.id,
+          {
+            title: form.title,
+            author: form.author,
+            description: form.description,
+            category: form.category,
+            cover_image: form.cover_image || null,
+            age_rating: form.age_rating || "Livre",
+          },
+          token
+        );
+        toast.success(`Livro "${form.title}" atualizado com sucesso!`);
+      } else {
+        const releaseYear = form.release_year ? parseInt(form.release_year, 10) : new Date().getFullYear();
+        await api.adminImportBook(
+          {
+            title: form.title,
+            author: form.author,
+            description: form.description,
+            category: form.category,
+            cover_image: form.cover_image || null,
+            file_path: file.name,
+            file_type: fileType,
+            age_rating: form.age_rating || "Livre",
+            release_year: releaseYear,
+          },
+          token
+        );
+        toast.success(`Livro "${form.title}" adicionado com sucesso!`);
+      }
+      await loadExistingBooks();
+    } catch (e) {
+      toast.error(existingBook ? "Erro ao atualizar livro" : "Erro ao adicionar livro");
+      console.error(e);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {

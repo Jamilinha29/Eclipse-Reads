@@ -30,7 +30,7 @@ const Home = () => {
 
   useEffect(() => {
     const loadQuotes = async () => {
-      const response = await api.getQuoteOfDay();
+      const response = await api.getQuoteOfDay({ rotate: true });
       setDailyQuote(response?.quote ?? null);
     };
 

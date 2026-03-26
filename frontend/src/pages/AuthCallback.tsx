@@ -9,20 +9,34 @@ const AuthCallback = () => {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            toast.error("Erro ao concluir login com Google");
+            navigate("/auth", { replace: true });
+            return;
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          toast.success("Login realizado com sucesso!");
+          navigate("/", { replace: true });
+          return;
+        }
+
+        // Fallback para casos de sincronização tardia da sessão.
         const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (error) {
-          toast.error("Erro ao fazer login");
+        if (error || !user) {
+          toast.error("Não foi possível finalizar o login com Google");
           navigate("/auth", { replace: true });
           return;
         }
 
-        if (user) {
-          toast.success("Login realizado com sucesso!");
-          navigate("/", { replace: true });
-        } else {
-          navigate("/auth", { replace: true });
-        }
+        toast.success("Login realizado com sucesso!");
+        navigate("/", { replace: true });
       } catch (error) {
         console.error("Error in callback:", error);
         navigate("/auth", { replace: true });

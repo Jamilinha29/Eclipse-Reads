@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { toastNeedLogin } from "@/lib/loginToast";
 import { useState, useEffect } from "react";
 import { ReviewSection } from "@/components/ReviewSection";
 import { api } from "@/lib/api";
@@ -83,21 +84,21 @@ const BookDetail = () => {
   const handleToggleFavorite = async () => {
     const success = await toggleFavorite(id!, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 
   const handleToggleReading = async () => {
     const success = await toggleReading(id!, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 
   const handleToggleRead = async () => {
     const success = await toggleRead(id!, bookLimit);
     if (!success) {
-      toast.error("Limite atingido! Faça login para adicionar mais livros.");
+      toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
     }
   };
 

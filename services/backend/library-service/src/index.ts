@@ -3,6 +3,7 @@ import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
+import multer from "multer";
 
 // Carrega as variáveis de ambiente do arquivo library-service.env
 dotenv.config({ path: path.join(process.cwd(), '../envs/library-service.env') });
@@ -10,8 +11,16 @@ dotenv.config({ path: path.join(process.cwd(), '../envs/library-service.env') })
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 const app = express();
+app.disable("x-powered-by");
 app.use(cors());
 app.use(express.json());
+app.use((_req: Request, res: Response, next) => {
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -46,6 +55,25 @@ const getUserFromAuthHeader = async (authHeader: string) => {
 };
 
 const svcClient = () => createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+const PROFILE_MEDIA_BUCKET = "avatars";
+const profileMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+function storageObjectPathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
+  if (!url?.trim()) return null;
+  const withoutQuery = url.split("?")[0];
+  const marker = `/object/public/${bucket}/`;
+  const idx = withoutQuery.indexOf(marker);
+  if (idx === -1) return null;
+  try {
+    return decodeURIComponent(withoutQuery.slice(idx + marker.length));
+  } catch {
+    return withoutQuery.slice(idx + marker.length);
+  }
+}
 
 // GET /library?type=favoritos  (or 'lendo' or 'lidos')
 // Requires Authorization: Bearer <token>
@@ -159,12 +187,14 @@ app.get("/me/admin", async (req: Request, res: Response) => {
     const { data, error } = await svc
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
+      .eq("user_id", user.id);
 
     if (error) return res.status(500).json({ error: error.message });
-    return res.json({ isAdmin: !!data });
+    const roles = (data ?? [])
+      .map((row: any) => (typeof row?.role === "string" ? row.role.trim().toLowerCase() : ""))
+      .filter(Boolean);
+    const isAdmin = roles.includes("admin") || roles.includes("adm");
+    return res.json({ isAdmin });
   } catch (err: any) {
     const status = err?.statusCode ? Number(err.statusCode) : 500;
     return res.status(status).json({ error: err.message ?? String(err) });
@@ -211,6 +241,68 @@ app.put("/me/profile", async (req: Request, res: Response) => {
 
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ profile: data ?? null });
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: err.message ?? String(err) });
+  }
+});
+
+// POST /me/profile-media — upload avatar/banner no bucket avatars (sem Supabase no browser)
+app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Request, res: Response) => {
+  try {
+    const authHeader = requireAuthHeader(req);
+    const user = await getUserFromAuthHeader(authHeader);
+    const file = req.file;
+    const kind = req.body?.kind === "banner" ? "banner" : "avatar";
+    if (!file || !file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ error: "image file required" });
+    }
+
+    const svc = svcClient();
+    const objectPath = `${user.id}/${kind}`;
+
+    const { data: profile, error: pErr } = await svc
+      .from("profiles")
+      .select("username, avatar_image, banner_image")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (pErr) return res.status(500).json({ error: pErr.message });
+
+    const previousUrl = kind === "avatar" ? profile?.avatar_image : profile?.banner_image;
+    const oldPath = storageObjectPathFromPublicUrl(previousUrl, PROFILE_MEDIA_BUCKET);
+    if (oldPath && oldPath !== objectPath) {
+      await svc.storage.from(PROFILE_MEDIA_BUCKET).remove([oldPath]).catch(() => null);
+    }
+
+    const { error: upErr } = await svc.storage.from(PROFILE_MEDIA_BUCKET).upload(objectPath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true,
+      cacheControl: "3600",
+    });
+    if (upErr) return res.status(500).json({ error: upErr.message });
+
+    const { data: pub } = svc.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
+    const publicUrl = pub.publicUrl;
+
+    const fallbackName = user.email?.split("@")[0]?.trim() || "Usuário";
+    const username =
+      typeof profile?.username === "string" && profile.username.trim() ? profile.username.trim() : fallbackName;
+
+    const upsertRow: Record<string, unknown> = {
+      user_id: user.id,
+      username,
+      avatar_image: kind === "avatar" ? publicUrl : profile?.avatar_image ?? null,
+      banner_image: kind === "banner" ? publicUrl : profile?.banner_image ?? null,
+    };
+
+    const { data: saved, error: saveErr } = await svc
+      .from("profiles")
+      .upsert(upsertRow, { onConflict: "user_id" })
+      .select("*")
+      .maybeSingle();
+    if (saveErr) return res.status(500).json({ error: saveErr.message });
+
+    return res.json({ publicUrl, profile: saved });
   } catch (err: any) {
     const status = err?.statusCode ? Number(err.statusCode) : 500;
     return res.status(status).json({ error: err.message ?? String(err) });

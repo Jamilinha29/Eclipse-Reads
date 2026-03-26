@@ -8,7 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, AUTH_REMEMBER_ME_KEY } from "@/integrations/supabase/client";
+import {
+  supabase,
+  AUTH_REMEMBER_ME_KEY,
+  AUTH_SAVED_EMAIL_KEY,
+  AUTH_SAVED_PASSWORD_KEY,
+} from "@/integrations/supabase/client";
 import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
 import { UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +38,14 @@ const Auth = () => {
   );
 
 
+  // Link antigo de recuperação que apontava para /auth: envia para a página correta (mantém o hash).
+  useEffect(() => {
+    const h = window.location.hash || "";
+    if (h.includes("type=recovery")) {
+      navigate(`/reset-password${h}`, { replace: true });
+    }
+  }, [navigate]);
+
   // Redireciona se já estiver logado
   useEffect(() => {
     if (isLoggedIn) {
@@ -42,6 +55,12 @@ const Auth = () => {
 
   const handleGuestLogin = () => {
     localStorage.removeItem(AUTH_REMEMBER_ME_KEY);
+    try {
+      localStorage.removeItem(AUTH_SAVED_EMAIL_KEY);
+      localStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
+    } catch {
+      /* ignore */
+    }
     localStorage.setItem(GUEST_AUTH_FLAG_KEY, "guest");
     setAuthType("guest");
     setUserId(null);
@@ -73,6 +92,17 @@ const Auth = () => {
     }
 
     if (data.user) {
+      try {
+        if (rememberMe) {
+          localStorage.setItem(AUTH_SAVED_EMAIL_KEY, email);
+          localStorage.setItem(AUTH_SAVED_PASSWORD_KEY, password);
+        } else {
+          localStorage.removeItem(AUTH_SAVED_EMAIL_KEY);
+          localStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
+        }
+      } catch {
+        /* ignore */
+      }
       toast.success("Login realizado com sucesso!");
       navigate("/", { replace: true });
     }
@@ -96,9 +126,10 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const redirectUrl = `${window.location.origin}/`;
+    // Rota pública: evita perder o hash de confirmação ao passar por rotas protegidas.
+    const redirectUrl = `${window.location.origin}/auth`;
 
-    const { error } = await authClient.signUp({
+    const { data: signData, error } = await authClient.signUp({
       email,
       password,
       options: {
@@ -117,6 +148,11 @@ const Auth = () => {
       } else {
         toast.error("Erro ao criar conta: " + error.message);
       }
+      return;
+    }
+
+    if (signData?.user && !signData.session) {
+      toast.success("Enviamos um e-mail de confirmação. Abra o link para ativar a conta.");
       return;
     }
 

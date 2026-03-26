@@ -8,6 +8,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import Header from "./components/Header";
+import AuthLinkHandler from "./components/AuthLinkHandler";
 import Home from "./pages/Home";
 import Search from "./pages/Search";
 import Library from "./pages/Library";
@@ -17,6 +18,7 @@ import Plan from "./pages/Plan";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import SubmitBook from "./pages/SubmitBook";
 import MySubmissions from "./pages/MySubmissions";
 import AdminPanel from "./pages/AdminPanel";
@@ -34,10 +36,12 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <AuthLinkHandler />
             <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth-callback" element={<AuthCallback />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
               <Route
                 path="/*"
                 element={

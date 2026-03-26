@@ -8,6 +8,8 @@
     "build": "cd frontend && npm run build",
     "preview": "cd frontend && npm run preview",
     "install:frontend": "cd frontend && npm install",
+    "install:backends": "npm install --prefix services/backend/auth-proxy && npm install --prefix services/backend/books-api && npm install --prefix services/backend/library-service",
+    "install:all": "npm run install:frontend && npm run install:backends",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -35,8 +35,12 @@ export const api = {
     return `${BOOKS_API_BASE_URL}/books/${id}/file`;
   },
 
-  async getQuoteOfDay() {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/quotes/today`);
+  async getQuoteOfDay(options?: { rotate?: boolean }) {
+    const q =
+      options?.rotate === false
+        ? ""
+        : "?rotate=1";
+    const response = await fetch(`${BOOKS_API_BASE_URL}/quotes/today${q}`);
     return handleResponse(response);
   },
 
@@ -115,6 +119,18 @@ export const api = {
     return handleResponse(response);
   },
 
+  async uploadProfileMedia(kind: "avatar" | "banner", file: File, token: string) {
+    const form = new FormData();
+    form.append("kind", kind);
+    form.append("file", file);
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile-media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    return handleResponse(response);
+  },
+
   async getMeSettings(token: string) {
     const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -188,6 +204,87 @@ export const api = {
   ) {
     const response = await fetch(`${LIBRARY_API_BASE_URL}/reading-progress/${bookId}`, {
       method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  // Admin (books-api) — Bearer + role admin
+  async adminGetSubmissions(token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/submissions`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async adminApproveSubmission(id: string, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/submissions/${id}/approve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async adminRejectSubmission(id: string, rejection_reason: string, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/submissions/${id}/reject`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ rejection_reason }),
+    });
+    return handleResponse(response);
+  },
+
+  async adminListBooksStorage(token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/storage/books`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  async adminDownloadStorageFile(storagePath: string, downloadFileName: string, token: string) {
+    const url = `${BOOKS_API_BASE_URL}/admin/storage/books/download?path=${encodeURIComponent(storagePath)}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(err.error || `Erro ${response.status}`);
+    }
+    const blob = await response.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = downloadFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  },
+
+  async adminUploadCover(file: File, basename: string, token: string) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("basename", basename);
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/storage/books/cover`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    return handleResponse(response);
+  },
+
+  async adminUpdateBook(id: string, payload: Record<string, unknown>, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/books/${id}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  async adminImportBook(payload: Record<string, unknown>, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/books/import`, {
+      method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
