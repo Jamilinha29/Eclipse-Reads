@@ -19,18 +19,12 @@ const ResetPassword = () => {
 
   useEffect(() => {
     const hash = window.location.hash || "";
-    // #region agent log
-    fetch('http://127.0.0.1:7496/ingest/d9af6dbb-bd7d-4391-aac0-8299a406f549',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc9329'},body:JSON.stringify({sessionId:'fc9329',runId:'recovery-debug-1',hypothesisId:'H4',location:'ResetPassword.tsx:useEffect:start',message:'ResetPassword mounted',data:{hasHash:!!hash,path:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (hash) {
       const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
       const errorCode = hashParams.get("error_code");
       if (errorCode === "otp_expired") {
         setLinkError("Link expirado. Solicite um novo e-mail de recuperação.");
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7496/ingest/d9af6dbb-bd7d-4391-aac0-8299a406f549',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc9329'},body:JSON.stringify({sessionId:'fc9329',runId:'recovery-debug-1',hypothesisId:'H4',location:'ResetPassword.tsx:useEffect:hashParsed',message:'Reset hash parsed',data:{type:hashParams.get('type'),errorCode,error:hashParams.get('error')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     }
 
     const searchParams = new URLSearchParams(window.location.search);
@@ -38,21 +32,12 @@ const ResetPassword = () => {
     if (searchErrorCode === "otp_expired") {
       setLinkError("Link expirado. Solicite um novo e-mail de recuperação.");
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7496/ingest/d9af6dbb-bd7d-4391-aac0-8299a406f549',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc9329'},body:JSON.stringify({sessionId:'fc9329',runId:'recovery-debug-1',hypothesisId:'H5',location:'ResetPassword.tsx:useEffect:searchParsed',message:'Reset search params parsed',data:{searchErrorCode},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7496/ingest/d9af6dbb-bd7d-4391-aac0-8299a406f549',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc9329'},body:JSON.stringify({sessionId:'fc9329',runId:'recovery-debug-1',hypothesisId:'H5',location:'ResetPassword.tsx:onAuthStateChange',message:'Auth state change in reset flow',data:{event},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (event === "PASSWORD_RECOVERY") setSessionReady(true);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7496/ingest/d9af6dbb-bd7d-4391-aac0-8299a406f549',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc9329'},body:JSON.stringify({sessionId:'fc9329',runId:'recovery-debug-1',hypothesisId:'H5',location:'ResetPassword.tsx:getSession',message:'Initial session check on reset page',data:{hasSession:!!session},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (session) setSessionReady(true);
     });
 

@@ -65,6 +65,22 @@ git scripts do frontend
 
 > Observação: o projeto tem duas árvores de dependências (`node_modules` em `./` e em `./frontend`). Essa divisão é intencional para separar backend/testes e frontend.
 
+### Deploy na Vercel (variáveis de ambiente)
+
+O `vercel.json` na raiz já aponta build e saída para `frontend/`. No painel da Vercel, configure **Environment Variables** (Production e, se quiser, Preview):
+
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `VITE_SUPABASE_URL` | Sim | URL do projeto no Supabase (Settings → API). |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Sim | Chave anônima pública do Supabase (mesma tela). |
+| `VITE_BOOKS_API_URL` | Sim em produção | URL pública do **books-api** (livros, frase do dia, reviews). |
+| `VITE_LIBRARY_API_URL` | Sim em produção | URL pública do **library-service** (perfil, tema, listas da biblioteca, `/me/*`). |
+| `VITE_API_URL` | Não | Se books e library forem servidos na **mesma origem**, pode usar só esta como fallback para os dois. |
+
+Sem as `VITE_SUPABASE_*`, o bundle falha ao iniciar (tela vazia). Sem as URLs dos backends, o app abre mas chamadas caem em `localhost` no navegador e dados não carregam. Depois de alterar variáveis, faça **Redeploy**.
+
+Modelo local: copie `frontend/.env.example` para `frontend/.env` e preencha.
+
 ## Quais tecnologias e frarramentas são ultilizadas neste projeto?
 
 

@@ -25,6 +25,8 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  /** Evita conflito Chrome/autofill com inputs controlados até o usuário focar o campo. */
+  const [loginAutofillUnlock, setLoginAutofillUnlock] = useState(false);
   const { setAuthType, setUserId, isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const authClient = supabase.auth as any;
@@ -46,7 +48,8 @@ const Auth = () => {
     }
   }, [navigate]);
 
-  // Redireciona se já estiver logado
+  // Redireciona se já estiver logado (inclui após login/cadastro, quando o Supabase atualiza o contexto).
+  // Não chame navigate("/") no handler de submit: o ProtectedRoute pode ainda ver isLoggedIn === false e causar corrida/tela estranha.
   useEffect(() => {
     if (isLoggedIn) {
       navigate("/", { replace: true });
@@ -104,7 +107,6 @@ const Auth = () => {
         /* ignore */
       }
       toast.success("Login realizado com sucesso!");
-      navigate("/", { replace: true });
     }
   };
 
@@ -157,7 +159,6 @@ const Auth = () => {
     }
 
     toast.success("Conta criada! Você já pode fazer login.");
-    navigate("/", { replace: true });
   };
 
   const handleGoogleLogin = async () => {
@@ -214,28 +215,36 @@ const Auth = () => {
             </TabsList>
 
             <TabsContent value="login">
-              <form className="space-y-4" onSubmit={handleEmailLogin}>
+              <form className="space-y-4" onSubmit={handleEmailLogin} autoComplete="on">
                 <div className="space-y-2">
                   <Label htmlFor="email">E-mail</Label>
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="seu@email.com"
                     className="h-11"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    readOnly={!loginAutofillUnlock}
+                    onFocus={() => setLoginAutofillUnlock(true)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Senha</Label>
                   <Input 
-                    id="password" 
+                    id="password"
+                    name="password"
                     type="password" 
                     placeholder="••••••" 
                     className="h-11"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    readOnly={!loginAutofillUnlock}
+                    onFocus={() => setLoginAutofillUnlock(true)}
                     required
                   />
                 </div>
@@ -286,15 +295,17 @@ const Auth = () => {
             </TabsContent>
 
             <TabsContent value="signup">
-              <form className="space-y-4" onSubmit={handleEmailSignup}>
+              <form className="space-y-4" onSubmit={handleEmailSignup} autoComplete="on">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome Completo</Label>
                   <Input 
-                    id="name" 
+                    id="name"
+                    name="name"
                     placeholder="Seu nome completo" 
                     className="h-11"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
                     required
                   />
                 </div>
@@ -302,11 +313,13 @@ const Auth = () => {
                   <Label htmlFor="signup-email">E-mail</Label>
                   <Input
                     id="signup-email"
+                    name="signup-email"
                     type="email"
                     placeholder="seu@email.com"
                     className="h-11"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -314,11 +327,13 @@ const Auth = () => {
                   <Label htmlFor="signup-password">Senha</Label>
                   <Input
                     id="signup-password"
+                    name="signup-password"
                     type="password"
                     placeholder="••••••"
                     className="h-11"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
                     required
                   />
                 </div>
@@ -326,11 +341,13 @@ const Auth = () => {
                   <Label htmlFor="confirm-password">Confirmar Senha</Label>
                   <Input
                     id="confirm-password"
+                    name="confirm-password"
                     type="password"
                     placeholder="••••••"
                     className="h-11"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     required
                   />
                 </div>
