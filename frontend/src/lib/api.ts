@@ -139,7 +139,12 @@ export const api = {
   },
 
   async updateMeSettings(
-    payload: { theme?: "light" | "dark"; sound_enabled?: boolean; notifications_enabled?: boolean },
+    payload: { 
+      theme?: "light" | "dark"; 
+      sound_enabled?: boolean; 
+      notifications_enabled?: boolean;
+      new_books_notifications?: boolean;
+    },
     token: string
   ) {
     const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
@@ -153,6 +158,38 @@ export const api = {
   async getGoals(token: string) {
     const response = await fetch(`${LIBRARY_API_BASE_URL}/goals`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
+  // ACHIEVEMENTS
+  async getAchievements() {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/achievements`);
+    const data = await handleResponse(response);
+    return data;
+  },
+
+  async toggleAchievement(id: string, token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/achievements/${id}/toggle`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return handleResponse(response);
+  },
+
+  async adminCreateAchievement(payload: { title: string; description?: string }, token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/admin/achievements`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  // STATS
+  async getMeStats(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
     return handleResponse(response);
   },

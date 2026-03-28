@@ -15,7 +15,7 @@ const Settings = () => {
   const [localUsername, setLocalUsername] = useState(username);
   const [theme, setTheme] = useState<"light" | "dark">(globalTheme);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [newBooksNotifications, setNewBooksNotifications] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,7 +34,7 @@ const Settings = () => {
         setTheme(t);
         setGlobalTheme(t);
         setSoundEnabled(!!settings.sound_enabled);
-        setNotificationsEnabled(!!settings.notifications_enabled);
+        setNewBooksNotifications(!!settings.new_books_notifications);
       }
     };
 
@@ -44,10 +44,29 @@ const Settings = () => {
   // Salva configurações via backend
   const saveSettings = async () => {
     if (!userId || !token) return;
-    await api.updateMeSettings(
-      { theme, sound_enabled: soundEnabled, notifications_enabled: notificationsEnabled },
-      token
-    );
+    try {
+      const response = await api.updateMeSettings(
+        { 
+          theme, 
+          sound_enabled: soundEnabled, 
+          new_books_notifications: newBooksNotifications
+        },
+        token
+      );
+      if (response.error) {
+        toast({
+          title: "Erro ao salvar",
+          description: response.error,
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor de configurações.",
+        variant: "destructive",
+      });
+    }
   };
 
   useEffect(() => {
@@ -55,7 +74,7 @@ const Settings = () => {
     if (userId) {
       saveSettings();
     }
-  }, [theme, soundEnabled, notificationsEnabled, userId, token]);
+  }, [theme, soundEnabled, newBooksNotifications, userId, token]);
 
   const handleSaveUsername = async () => {
     const name = localUsername.trim();
@@ -67,17 +86,11 @@ const Settings = () => {
       toast({ title: "Faça login com e-mail ou Google para salvar o nome", variant: "destructive" });
       return;
     }
-    try {
-      await api.updateMeProfile({ username: name }, token);
-      setUsername(name);
-      toast({ title: "Nome de usuário salvo!" });
-    } catch (e) {
-      toast({
-        title: "Erro ao salvar",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    }
+    
+    // AuthContext possui um useEffect que salva automaticamente quando o username muda.
+    // Basta chamar setUsername aqui para evitar a 'piscagem' e chamadas duplicadas.
+    setUsername(name);
+    toast({ title: "Nome de usuário atualizado!" });
   };
 
   const handleThemeChange = (newTheme: "light" | "dark") => {
@@ -159,10 +172,10 @@ const Settings = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-semibold">Notificações</p>
-                <p className="text-sm text-muted-foreground">Receber notificações de novas leituras</p>
+                <p className="font-semibold">Novos Livros</p>
+                <p className="text-sm text-muted-foreground">Receber avisos de novos livros adicionados</p>
               </div>
-              <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
+              <Switch checked={newBooksNotifications} onCheckedChange={setNewBooksNotifications} />
             </div>
           </div>
         </Card>

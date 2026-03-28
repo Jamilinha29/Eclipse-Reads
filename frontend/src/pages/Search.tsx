@@ -63,7 +63,17 @@ const Search = () => {
   useEffect(() => {
     const loadBooks = async () => {
       const response = await api.getBooks();
-      if (response?.books) setBooks(response.books);
+      if (response?.books) {
+        // Filtrar duplicados por título e autor (mantendo o primeiro encontrado, que é o mais recente)
+        const seen = new Set();
+        const unique = response.books.filter((b: any) => {
+          const key = `${b.title.toLowerCase() || 'unnamed'}-${b.author.toLowerCase() || 'unknown'}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setBooks(unique);
+      }
     };
 
     loadBooks();

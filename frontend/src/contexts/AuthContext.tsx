@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
         setUserId(currentSession.user.id);
         setAuthType(authTypeFromUser(currentSession.user));
-        setUsername(getDisplayNameFromUser(currentSession.user));
+        setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
         setProfileReady(false);
 
         const token = currentSession.access_token;
@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
         setUserId(currentSession.user.id);
         setAuthType(authTypeFromUser(currentSession.user));
-        setUsername(getDisplayNameFromUser(currentSession.user));
+        setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
         setProfileReady(false);
 
         const token = currentSession.access_token;
@@ -166,11 +166,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!accessToken) return;
 
     try {
+      // Limpa parâmetros de timestamp (?t=...) antes de salvar no banco
+      const cleanUrl = (u: string) => (u ? u.split("?")[0] : u);
       await api.updateMeProfile(
         {
           username,
-          avatar_image: avatarImage || undefined,
-          banner_image: bannerImage || undefined,
+          avatar_image: cleanUrl(avatarImage) || undefined,
+          banner_image: cleanUrl(bannerImage) || undefined,
         },
         accessToken
       );

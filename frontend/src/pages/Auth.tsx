@@ -18,6 +18,15 @@ import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage
 import { UserRound } from "lucide-react";
 import { toast } from "sonner";
 
+const GoogleIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+    <path
+      d="M21.35 11.1H12v2.98h5.37c-.24 1.52-1.85 4.47-5.37 4.47-3.23 0-5.87-2.68-5.87-5.98S8.77 6.6 12 6.6c1.84 0 3.08.79 3.79 1.47l2.58-2.5C16.73 4.07 14.56 3 12 3 6.93 3 2.82 7.13 2.82 12.2S6.93 21.4 12 21.4c6.93 0 9.18-4.87 9.18-7.39 0-.5-.05-.86-.12-1.2l.29-1.71z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 const Auth = () => {
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true");
   const [email, setEmail] = useState("");
@@ -25,20 +34,11 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  /** Evita conflito Chrome/autofill com inputs controlados até o usuário focar o campo. */
-  const [loginAutofillUnlock, setLoginAutofillUnlock] = useState(false);
-  const { setAuthType, setUserId, isLoggedIn } = useAuth();
+  const [activeTab, setActiveTab] = useState("login");
+  
+  const { setAuthType, setUserId, isLoggedIn, authType } = useAuth();
   const navigate = useNavigate();
   const authClient = supabase.auth as any;
-  const GoogleIcon = () => (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="M21.35 11.1H12v2.98h5.37c-.24 1.52-1.85 4.47-5.37 4.47-3.23 0-5.87-2.68-5.87-5.98S8.77 6.6 12 6.6c1.84 0 3.08.79 3.79 1.47l2.58-2.5C16.73 4.07 14.56 3 12 3 6.93 3 2.82 7.13 2.82 12.2S6.93 21.4 12 21.4c6.93 0 9.18-4.87 9.18-7.39 0-.5-.05-.86-.12-1.2l.29-1.71z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-
 
   // Link antigo de recuperação que apontava para /auth: envia para a página correta (mantém o hash).
   useEffect(() => {
@@ -49,12 +49,12 @@ const Auth = () => {
   }, [navigate]);
 
   // Redireciona se já estiver logado (inclui após login/cadastro, quando o Supabase atualiza o contexto).
-  // Não chame navigate("/") no handler de submit: o ProtectedRoute pode ainda ver isLoggedIn === false e causar corrida/tela estranha.
+  // Porém, se for convidado (guest), NÃO redireciona, para que ele consiga fazer o login real.
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && authType !== "guest") {
       navigate("/", { replace: true });
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoggedIn, authType, navigate]);
 
   const handleGuestLogin = () => {
     localStorage.removeItem(AUTH_REMEMBER_ME_KEY);
@@ -208,7 +208,7 @@ const Auth = () => {
         </div>
 
         <Card className="p-8 border-border">
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Criar Conta</TabsTrigger>
@@ -227,8 +227,6 @@ const Auth = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
-                    readOnly={!loginAutofillUnlock}
-                    onFocus={() => setLoginAutofillUnlock(true)}
                     required
                   />
                 </div>
@@ -243,8 +241,6 @@ const Auth = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
-                    readOnly={!loginAutofillUnlock}
-                    onFocus={() => setLoginAutofillUnlock(true)}
                     required
                   />
                 </div>

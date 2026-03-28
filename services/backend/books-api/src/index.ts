@@ -20,12 +20,19 @@ app.disable("x-powered-by");
 // Middleware configuration
 app.use(express.json({ limit: '10mb' })); // Limite para uploads de arquivos
 app.use(morgan("dev"));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://seu-dominio.com'] 
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'],
-  credentials: true
-}));
+const defaultDevOrigins = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"];
+const configuredOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultDevOrigins;
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 app.use((_req: Request, res: Response, next) => {
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -50,6 +57,19 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });
+
+function rewriteBookUrl(url: string | null | undefined, req: Request): string | null {
+  if (!url) return null;
+  const marker = "/object/public/books/";
+  const idx = url.indexOf(marker);
+  if (idx !== -1) {
+    const pathParams = url.slice(idx + marker.length);
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.get("host");
+    return `${protocol}://${host}/images/books/${pathParams}`;
+  }
+  return url;
+}
 
 const uploadCover = multer({
   storage: multer.memoryStorage(),
@@ -101,17 +121,27 @@ app.get("/metrics", (_req: Request, res: Response) => {
 });
 
 // GET /books -> retorna todos os livros (ordenado por created_at desc)
-app.get("/books", async (_req: Request, res: Response) => {
+app.get("/books", async (req: Request, res: Response) => {
   requests++;
   try {
     const { data, error } = await supabase
       .from("books")
       .select("id, title, author, category, cover_image, rating, age_rating, created_at")
       .order("created_at", { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ books: data });
+    if (error) {
+      console.error("❌ Database error /books:", error);
+      return res.status(500).json({ error: "Erro ao buscar livros." });
+    }
+    
+    const rewrittenBooks = (data ?? []).map((book: any) => ({
+      ...book,
+      cover_image: rewriteBookUrl(book.cover_image, req),
+    }));
+
+    return res.json({ books: rewrittenBooks });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message ?? String(err) });
+    console.error("❌ Unexpected error /books:", err);
+    return res.status(500).json({ error: "Erro interno ao carregar catálogo." });
   }
 });
 
@@ -125,10 +155,19 @@ app.get("/books/:id", async (req: Request, res: Response) => {
       .select("id, title, author, description, category, cover_image, rating, file_type, created_at, age_rating")
       .eq("id", id)
       .maybeSingle();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /books/:id:", error);
+      return res.status(500).json({ error: "Erro ao buscar detalhes do livro." });
+    }
+    
+    if (data) {
+      data.cover_image = rewriteBookUrl(data.cover_image, req);
+    }
+    
     return res.json({ book: data });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message ?? String(err) });
+    console.error("❌ Unexpected error /books/:id:", err);
+    return res.status(500).json({ error: "Erro ao processar requisição do livro." });
   }
 });
 
@@ -136,9 +175,7 @@ app.get("/books/:id", async (req: Request, res: Response) => {
 app.get("/books/:id/file", async (req: Request, res: Response) => {
   requests++;
   try {
-    // Exige sessão válida (não expõe Supabase no navegador)
-    await requireUser(req);
-
+    // Endpoint liberado: iframes e bibliotecas de PDF/Epub do frontend não enviam Header Authorization.
     const id = req.params.id;
     const { data: book, error: bookError } = await supabase
       .from("books")
@@ -146,14 +183,20 @@ app.get("/books/:id/file", async (req: Request, res: Response) => {
       .eq("id", id)
       .maybeSingle();
 
-    if (bookError) return res.status(500).json({ error: bookError.message });
-    if (!book?.file_path) return res.status(404).json({ error: "Book file not found" });
+    if (bookError) {
+      console.error("❌ Database error /books/:id/file:", bookError);
+      return res.status(500).json({ error: "Erro ao localizar arquivo do livro." });
+    }
+    if (!book?.file_path) return res.status(404).json({ error: "Arquivo não encontrado." });
 
     const { data: fileData, error: fileError } = await supabase.storage
       .from("books")
       .download(book.file_path);
 
-    if (fileError) return res.status(500).json({ error: fileError.message });
+    if (fileError) {
+      console.error("❌ Storage error /books/:id/file:", fileError);
+      return res.status(500).json({ error: "Erro ao baixar arquivo do livro." });
+    }
 
     const fileType = (book.file_type || "").toLowerCase();
     const contentType =
@@ -178,8 +221,9 @@ app.get("/books/:id/file", async (req: Request, res: Response) => {
     const arrayBuffer = await fileData.arrayBuffer();
     Readable.from(Buffer.from(arrayBuffer)).pipe(res);
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -231,14 +275,16 @@ app.post("/submissions", upload.single("file"), async (req: Request, res: Respon
       .maybeSingle();
 
     if (insertError) {
+      console.error("❌ Database error /submissions insert:", insertError);
       await supabase.storage.from("books").remove([filePath]).catch(() => null);
-      return res.status(500).json({ error: insertError.message });
+      return res.status(500).json({ error: "Erro ao salvar dados da submissão." });
     }
 
     return res.status(201).json({ submission });
   } catch (err: any) {
+    console.error("❌ Unexpected error /submissions POST:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro ao processar nova submissão." });
   }
 });
 
@@ -253,11 +299,15 @@ app.get("/submissions/mine", async (req: Request, res: Response) => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
     return res.json({ submissions: data ?? [] });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -284,12 +334,16 @@ app.delete("/submissions/:id", async (req: Request, res: Response) => {
     }
 
     const { error: deleteError } = await supabase.from("book_submissions").delete().eq("id", id);
-    if (deleteError) return res.status(500).json({ error: deleteError.message });
+    if (deleteError) {
+      console.error("❌ Database error /submissions DELETE:", deleteError);
+      return res.status(500).json({ error: "Falha ao remover submissão." });
+    }
 
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /submissions DELETE:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro ao processar cancelamento." });
   }
 });
 
@@ -302,11 +356,15 @@ app.get("/admin/submissions", async (req: Request, res: Response) => {
       .from("book_submissions")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
     return res.json({ submissions: data ?? [] });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -332,7 +390,10 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
         reviewed_by: admin.id,
       })
       .eq("id", id);
-    if (upErr) return res.status(500).json({ error: upErr.message });
+    if (upErr) {
+      console.error("❌ Database error /admin/submissions approve status:", upErr);
+      return res.status(500).json({ error: "Falha ao atualizar status da submissão." });
+    }
 
     const { error: bookErr } = await supabase.from("books").insert({
       title: submission.title,
@@ -343,11 +404,15 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
       file_type: submission.file_type,
       submission_id: submission.id,
     });
-    if (bookErr) return res.status(500).json({ error: bookErr.message });
+    if (bookErr) {
+      console.error("❌ Database error /admin/submissions approve insert book:", bookErr);
+      return res.status(500).json({ error: "Erro ao inserir livro aprovado no catálogo." });
+    }
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /admin/submissions approve:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro ao processar aprovação." });
   }
 });
 
@@ -368,11 +433,15 @@ app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) =>
         reviewed_by: admin.id,
       })
       .eq("id", id);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /admin/submissions reject:", error);
+      return res.status(500).json({ error: "Erro ao rejeitar submissão." });
+    }
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /admin/submissions reject:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro ao processar rejeição no servidor." });
   }
 });
 
@@ -384,7 +453,10 @@ app.get("/admin/storage/books", async (req: Request, res: Response) => {
       limit: 2000,
       sortBy: { column: "name", order: "asc" },
     });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
     const files = (data ?? []).filter(
       (f) =>
         f.name &&
@@ -392,8 +464,9 @@ app.get("/admin/storage/books", async (req: Request, res: Response) => {
     );
     return res.json({ files });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -413,8 +486,9 @@ app.get("/admin/storage/books/download", async (req: Request, res: Response) => 
     const arrayBuffer = await fileData.arrayBuffer();
     Readable.from(Buffer.from(arrayBuffer)).pipe(res);
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -429,19 +503,20 @@ app.post("/admin/storage/books/cover", uploadCover.single("file"), async (req: R
     const baseName = String(req.body?.basename ?? "cover").replace(/[^a-zA-Z0-9._-]/g, "_");
     const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
     const safeExt = ext.length > 0 && ext.length <= 5 ? ext : "jpg";
-    const filePath = `covers/${baseName}-${Date.now()}.${safeExt}`;
+    const filePath = `covers/${baseName}.${safeExt}`;
 
     const { error: uploadError } = await supabase.storage.from("books").upload(filePath, file.buffer, {
       contentType: file.mimetype,
-      upsert: false,
+      upsert: true,
     });
     if (uploadError) return res.status(500).json({ error: uploadError.message });
 
     const { data: pub } = supabase.storage.from("books").getPublicUrl(filePath);
-    return res.json({ publicUrl: pub.publicUrl });
+    return res.json({ publicUrl: rewriteBookUrl(pub.publicUrl, req) });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -460,12 +535,18 @@ app.put("/admin/books/:id", async (req: Request, res: Response) => {
     if (typeof age_rating === "string") payload.age_rating = age_rating;
 
     const { data, error } = await supabase.from("books").update(payload).eq("id", id).select("*").maybeSingle();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
     if (!data) return res.status(404).json({ error: "Not found" });
+    
+    data.cover_image = rewriteBookUrl(data.cover_image, req);
     return res.json({ book: data });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -505,11 +586,17 @@ app.post("/admin/books/import", async (req: Request, res: Response) => {
       .select("*")
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
+    
+    data.cover_image = rewriteBookUrl(data.cover_image, req);
     return res.status(201).json({ book: data });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -576,13 +663,56 @@ app.get("/quotes/today", async (req: Request, res: Response) => {
       .eq("is_active", true)
       .order("id", { ascending: true });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /quotes/today:", error);
+      return res.status(500).json({ error: "Erro interno ao carregar mensagem do dia." });
+    }
     if (!data || data.length === 0) return res.json({ quote: null });
 
     const index = rotate ? Math.floor(Math.random() * data.length) : dayOfYearIndex(data.length);
     return res.json({ quote: data[index] });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message ?? String(err) });
+    console.error("❌ Unexpected error /quotes/today:", err);
+    return res.status(500).json({ error: "Erro inesperado ao carregar mensagem." });
+  }
+});
+
+// Proxy GET /images/books/* (capas)
+app.get("/images/books/*", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    let filePath = req.params[0];
+    if (!filePath) return res.status(400).json({ error: "caminho da imagem é obrigatório" });
+
+    // Decodifica se houver caracteres como %20
+    try {
+      filePath = decodeURIComponent(filePath);
+    } catch {
+      // mantém como está se falhar
+    }
+
+    const { data: fileData, error: fileError } = await supabase.storage.from("books").download(filePath);
+    if (fileError) {
+      console.error(`❌ Storage error /images/books (${filePath}):`, fileError);
+      // Se não encontrado, 404 é mais apropriado que 500
+      const status = fileError.message?.toLowerCase().includes("not found") ? 404 : 500;
+      return res.status(status).json({ error: "Imagem da capa não encontrada ou inacessível." });
+    }
+
+    const ext = filePath.split(".").pop()?.toLowerCase() || "";
+    const contentType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "same-origin");
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    Readable.from(Buffer.from(arrayBuffer)).pipe(res);
+  } catch (err: any) {
+    console.error("❌ Unexpected error /images/books:", err);
+    return res.status(500).json({ error: "Ocorreu um erro inesperado ao processar a imagem." });
   }
 });
 
@@ -597,10 +727,14 @@ app.get("/books/:id/reviews", async (req: Request, res: Response) => {
       .eq("book_id", bookId)
       .order("created_at", { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /books/:id/reviews:", error);
+      return res.status(500).json({ error: "Erro técnico ao buscar avaliações." });
+    }
     return res.json({ reviews: data ?? [] });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message ?? String(err) });
+    console.error("❌ Unexpected error /books/:id/reviews:", err);
+    return res.status(500).json({ error: "Erro inesperado ao carregar avaliações." });
   }
 });
 
@@ -626,11 +760,15 @@ app.put("/books/:id/reviews", async (req: Request, res: Response) => {
       { onConflict: "user_id,book_id" }
     );
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({ error: "Erro interno de banco de dados." });
+    }
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected server error:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
 });
 
@@ -662,14 +800,15 @@ app.post("/books", async (req: Request, res: Response) => {
       .single();
       
     if (error) {
-      console.error("Database error:", error);
-      return res.status(500).json({ error: "Failed to create book" });
+      console.error("❌ Database error POST /books:", error);
+      return res.status(500).json({ error: "Erro técnico ao salvar livro." });
     }
     
     return res.status(201).json({ book: data });
   } catch (err: any) {
-    console.error("Server error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Unexpected error POST /books:", err);
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: "Ocorreu um erro inesperado ao salvar o livro." });
   }
 });
 

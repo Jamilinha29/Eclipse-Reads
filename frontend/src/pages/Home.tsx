@@ -37,7 +37,15 @@ const Home = () => {
     const loadBooks = async () => {
       const response = await api.getBooks();
       if (response?.books) {
-        setBooks(response.books.slice(0, 12));
+        // Filtrar duplicados por título e autor (mantendo o primeiro encontrado, que é o mais recente)
+        const seen = new Set();
+        const unique = response.books.filter((b: any) => {
+          const key = `${b.title.toLowerCase()}-${b.author.toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setBooks(unique.slice(0, 12));
       }
     };
 

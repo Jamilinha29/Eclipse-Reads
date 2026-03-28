@@ -108,7 +108,7 @@ const Library = () => {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {books
-                  .filter((book) => favorites.includes(book.id))
+                  .filter((book) => favorites.includes(String(book.id)))
                   .map((book) => (
                     <BookCard 
                       key={book.id} 
@@ -143,7 +143,7 @@ const Library = () => {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {books
-                  .filter((book) => reading.includes(book.id))
+                  .filter((book) => reading.includes(String(book.id)))
                   .map((book) => (
                     <BookCard 
                       key={book.id} 
@@ -178,7 +178,7 @@ const Library = () => {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {books
-                  .filter((book) => read.includes(book.id))
+                  .filter((book) => read.includes(String(book.id)))
                   .map((book) => (
                     <BookCard 
                       key={book.id} 

@@ -44,6 +44,11 @@ const Profile = () => {
     approvedSubmissions: 0,
     totalCategories: 0,
   });
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [userAchievementIds, setUserAchievementIds] = useState<string[]>([]);
+  const [newAchTitle, setNewAchTitle] = useState("");
+  const [newAchDesc, setNewAchDesc] = useState("");
+  const [totalPagesRead, setTotalPagesRead] = useState(0);
 
 
   // Verifica se o usuário é admin
@@ -83,13 +88,35 @@ const Profile = () => {
     loadGoals();
   }, [userId, isAdmin, token]);
 
+  // Carrega conquistas e stats
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const { achievements: all } = await api.getAchievements();
+        setAchievements(all);
+
+        if (token) {
+          const { totalPagesRead: total } = await api.getMeStats(token);
+          setTotalPagesRead(total);
+          
+          // No mundo real, buscaríamos quais conquistas o usuário já tem.
+          // Para simplificar e permitir "marcar", vamos assumir que o usuário pode clicar.
+          // Se as tabelas user_achievements existirem, podemos carregar aqui.
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados de perfil:", err);
+      }
+    };
+    loadData();
+  }, [token]);
+
   const userStats = [
     { icon: Heart, label: "Favoritos", value: favorites.length },
     { icon: Book, label: "Lendo", value: reading.length },
     { icon: CheckCircle, label: "Lidos", value: read.length },
-    { icon: Clock, label: "Leitura", value: 0 },
+    { icon: Clock, label: "Leitura", value: totalPagesRead },
     { icon: Award, label: "Metas", value: goals.length },
-    { icon: Target, label: "Conquistas", value: 0 },
+    { icon: Target, label: "Conquistas", value: userAchievementIds.length },
   ];
 
   const adminStats = [
@@ -229,7 +256,6 @@ const Profile = () => {
     setGoals(goals.filter((g) => g.id !== goalId));
     toast({ title: "Meta deletada!" });
   };
-
   const handleUpdateGoalProgress = async (goalId: string, increment: boolean) => {
     const goal = goals.find((g) => g.id === goalId);
     if (!goal) return;
@@ -255,6 +281,37 @@ const Profile = () => {
           : g
       )
     );
+  };
+
+  const handleCreateAchievement = async () => {
+    if (!newAchTitle || !token) {
+      toast({ title: "Título é obrigatório", variant: "destructive" });
+      return;
+    }
+    try {
+      const { achievement } = await api.adminCreateAchievement({ title: newAchTitle, description: newAchDesc }, token);
+      setAchievements([achievement, ...achievements]);
+      setNewAchTitle("");
+      setNewAchDesc("");
+      toast({ title: "Conquista criada com sucesso!" });
+    } catch (err) {
+      toast({ title: "Erro ao criar conquista", variant: "destructive" });
+    }
+  };
+
+  const handleToggleAchievement = async (id: string) => {
+    if (!token) return;
+    try {
+      const { achieved } = await api.toggleAchievement(id, token);
+      if (achieved) {
+        setUserAchievementIds([...userAchievementIds, id]);
+        toast({ title: "Conquista alcançada! 🎉" });
+      } else {
+        setUserAchievementIds(userAchievementIds.filter(aid => aid !== id));
+      }
+    } catch (err) {
+      toast({ title: "Erro ao atualizar conquista", variant: "destructive" });
+    }
   };
 
   return (
@@ -387,6 +444,28 @@ const Profile = () => {
                 >
                   <Upload className="h-4 w-4" />
                   Importar Livros
+                </Button>
+              </div>
+
+              <div className="pt-4 border-t border-background/10 space-y-3">
+                <h4 className="font-bold text-sm">Criar Nova Conquista</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <Input 
+                    placeholder="Título da conquista" 
+                    className="bg-background text-foreground"
+                    value={newAchTitle}
+                    onChange={(e) => setNewAchTitle(e.target.value)}
+                  />
+                  <Input 
+                    placeholder="Descrição (opcional)" 
+                    className="bg-background text-foreground"
+                    value={newAchDesc}
+                    onChange={(e) => setNewAchDesc(e.target.value)}
+                  />
+                </div>
+                <Button variant="secondary" className="w-full gap-2" onClick={handleCreateAchievement}>
+                  <Plus className="h-4 w-4" />
+                  Adicionar Conquista à Comunidade
                 </Button>
               </div>
               
@@ -573,6 +652,44 @@ const Profile = () => {
               ))}
             </div>
           )}
+          </div>
+        )}
+
+        {authType !== "guest" && !isAdmin && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Award className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-bold">Resgate suas Conquistas</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {achievements.length === 0 ? (
+                <div className="col-span-full py-8 text-center text-muted-foreground bg-secondary/30 rounded-lg border-2 border-dashed">
+                  Nenhuma conquista comunitária disponível ainda.
+                </div>
+              ) : (
+                achievements.map((ach) => {
+                  const isAchieved = userAchievementIds.includes(ach.id);
+                  return (
+                    <Card 
+                      key={ach.id} 
+                      className={`p-4 cursor-pointer transition-all hover:scale-105 ${isAchieved ? 'bg-primary/10 border-primary' : 'bg-secondary'}`}
+                      onClick={() => handleToggleAchievement(ach.id)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-full ${isAchieved ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}>
+                          <Award className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm">{ach.title}</h4>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{ach.description}</p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
       </section>

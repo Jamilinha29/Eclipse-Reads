@@ -66,6 +66,7 @@ const AdminPanel = () => {
   const [existingBooks, setExistingBooks] = useState<Set<string>>(new Set());
   const [existingBooksData, setExistingBooksData] = useState<Map<string, any>>(new Map());
   const [activeTab, setActiveTab] = useState("submissions");
+  const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const { token } = useAuth();
 
@@ -306,6 +307,7 @@ const AdminPanel = () => {
         toast.success(`Livro "${form.title}" adicionado com sucesso!`);
       }
       await loadExistingBooks();
+      setProcessedFiles((prev) => new Set(prev).add(file.name));
     } catch (e) {
       toast.error(existingBook ? "Erro ao atualizar livro" : "Erro ao adicionar livro");
       console.error(e);
@@ -507,109 +509,131 @@ const AdminPanel = () => {
                             <p className="text-sm text-muted-foreground mb-4">
                               Tamanho: {file.metadata?.size ? (file.metadata.size / 1024 / 1024).toFixed(2) + ' MB' : 'Desconhecido'}
                             </p>
-
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {processedFiles.has(file.name) ? (
+                              <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 flex flex-col items-center gap-3 text-center">
+                                <CheckCircle className="h-10 w-10 text-primary" />
                                 <div>
-                                  <Label htmlFor={`title-${file.id}`}>Título *</Label>
-                                  <Input
-                                    id={`title-${file.id}`}
-                                    value={form.title}
-                                    onChange={(e) => handleFormChange(file.name, 'title', e.target.value)}
-                                    placeholder="Digite o título do livro"
-                                  />
+                                  <h4 className="font-bold text-lg">Livro Processado!</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    "{form.title}" foi {isAlreadyImported ? 'atualizado' : 'adicionado'} com sucesso.
+                                  </p>
                                 </div>
-                                <div>
-                                  <Label htmlFor={`author-${file.id}`}>Autor *</Label>
-                                  <Input
-                                    id={`author-${file.id}`}
-                                    value={form.author}
-                                    onChange={(e) => handleFormChange(file.name, 'author', e.target.value)}
-                                    placeholder="Digite o nome do autor"
-                                  />
-                                </div>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => setProcessedFiles(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(file.name);
+                                    return next;
+                                  })}
+                                >
+                                  Editar novamente
+                                </Button>
                               </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor={`category-${file.id}`}>Categoria *</Label>
-                                  <Input
-                                    id={`category-${file.id}`}
-                                    value={form.category}
-                                    onChange={(e) => handleFormChange(file.name, 'category', e.target.value)}
-                                    placeholder="Ex: Ficção, Romance, etc."
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`cover-${file.id}`}>Imagem da Capa</Label>
-                                  <div className="flex gap-2">
+                            ) : (
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor={`title-${file.id}`}>Título *</Label>
                                     <Input
-                                      type="file"
-                                      accept="image/*"
-                                      id={`cover-file-${file.id}`}
-                                      onChange={async (e) => {
-                                        const imageFile = e.target.files?.[0];
-                                        if (imageFile) {
-                                          const url = await handleCoverImageUpload(file.name, imageFile);
-                                          if (url) {
-                                            handleFormChange(file.name, 'cover_image', url);
-                                          }
-                                        }
-                                      }}
-                                      className="flex-1"
+                                      id={`title-${file.id}`}
+                                      value={form.title}
+                                      onChange={(e) => handleFormChange(file.name, 'title', e.target.value)}
+                                      placeholder="Digite o título do livro"
                                     />
                                   </div>
-                                  {form.cover_image && (
-                                    <div className="mt-2">
-                                      <img src={form.cover_image} alt="Capa" className="h-24 w-16 object-cover rounded" />
+                                  <div>
+                                    <Label htmlFor={`author-${file.id}`}>Autor *</Label>
+                                    <Input
+                                      id={`author-${file.id}`}
+                                      value={form.author}
+                                      onChange={(e) => handleFormChange(file.name, 'author', e.target.value)}
+                                      placeholder="Digite o nome do autor"
+                                    />
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor={`category-${file.id}`}>Categoria *</Label>
+                                    <Input
+                                      id={`category-${file.id}`}
+                                      value={form.category}
+                                      onChange={(e) => handleFormChange(file.name, 'category', e.target.value)}
+                                      placeholder="Ex: Ficção, Romance, etc."
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor={`cover-${file.id}`}>Imagem da Capa</Label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        type="file"
+                                        accept="image/*"
+                                        id={`cover-file-${file.id}`}
+                                        onChange={async (e) => {
+                                          const imageFile = e.target.files?.[0];
+                                          if (imageFile) {
+                                            const url = await handleCoverImageUpload(file.name, imageFile);
+                                            if (url) {
+                                              handleFormChange(file.name, 'cover_image', url);
+                                            }
+                                          }
+                                        }}
+                                        className="flex-1"
+                                      />
                                     </div>
-                                  )}
+                                    {form.cover_image && (
+                                      <div className="mt-2">
+                                        <img src={form.cover_image} alt="Capa" className="h-24 w-16 object-cover rounded" />
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor={`age-rating-${file.id}`}>Faixa Etária</Label>
+                                    <Input
+                                      id={`age-rating-${file.id}`}
+                                      value={form.age_rating}
+                                      onChange={(e) => handleFormChange(file.name, 'age_rating', e.target.value)}
+                                      placeholder="Ex: Livre, 10+, 12+, 14+, 16+, 18+"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor={`release-year-${file.id}`}>Ano de Lançamento</Label>
+                                    <Input
+                                      id={`release-year-${file.id}`}
+                                      type="number"
+                                      value={form.release_year}
+                                      onChange={(e) => handleFormChange(file.name, 'release_year', e.target.value)}
+                                      placeholder="Ex: 2024"
+                                      min="1800"
+                                      max={new Date().getFullYear()}
+                                    />
+                                  </div>
+                                </div>
+
                                 <div>
-                                  <Label htmlFor={`age-rating-${file.id}`}>Faixa Etária</Label>
-                                  <Input
-                                    id={`age-rating-${file.id}`}
-                                    value={form.age_rating}
-                                    onChange={(e) => handleFormChange(file.name, 'age_rating', e.target.value)}
-                                    placeholder="Ex: Livre, 10+, 12+, 14+, 16+, 18+"
+                                  <Label htmlFor={`description-${file.id}`}>Descrição</Label>
+                                  <Textarea
+                                    id={`description-${file.id}`}
+                                    value={form.description}
+                                    onChange={(e) => handleFormChange(file.name, 'description', e.target.value)}
+                                    placeholder="Descrição do livro"
+                                    rows={3}
                                   />
                                 </div>
-                                <div>
-                                  <Label htmlFor={`release-year-${file.id}`}>Ano de Lançamento</Label>
-                                  <Input
-                                    id={`release-year-${file.id}`}
-                                    type="number"
-                                    value={form.release_year}
-                                    onChange={(e) => handleFormChange(file.name, 'release_year', e.target.value)}
-                                    placeholder="Ex: 2024"
-                                    min="1800"
-                                    max={new Date().getFullYear()}
-                                  />
-                                </div>
-                              </div>
 
-                              <div>
-                                <Label htmlFor={`description-${file.id}`}>Descrição</Label>
-                                <Textarea
-                                  id={`description-${file.id}`}
-                                  value={form.description}
-                                  onChange={(e) => handleFormChange(file.name, 'description', e.target.value)}
-                                  placeholder="Descrição do livro"
-                                  rows={3}
-                                />
+                                <Button
+                                  onClick={() => handleImportBook(file)}
+                                  disabled={actionLoading || !form.title || !form.author || !form.category}
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  {isAlreadyImported ? 'Salvar Alterações' : 'Adicionar à Biblioteca'}
+                                </Button>
                               </div>
-
-                              <Button
-                                onClick={() => handleImportBook(file)}
-                                disabled={actionLoading || !form.title || !form.author || !form.category}
-                              >
-                                <Upload className="h-4 w-4 mr-2" />
-                                {isAlreadyImported ? 'Salvar Alterações' : 'Adicionar à Biblioteca'}
-                              </Button>
-                            </div>
+                            )}
                           </div>
                         </div>
                       </Card>

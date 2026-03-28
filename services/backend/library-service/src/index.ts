@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
 import multer from "multer";
+import { Readable } from "stream";
 
 // Carrega as variáveis de ambiente do arquivo library-service.env
 dotenv.config({ path: path.join(process.cwd(), '../envs/library-service.env') });
@@ -59,7 +60,7 @@ const svcClient = () => createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const PROFILE_MEDIA_BUCKET = "avatars";
 const profileMediaUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
 });
 
 function storageObjectPathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
@@ -73,6 +74,19 @@ function storageObjectPathFromPublicUrl(url: string | null | undefined, bucket: 
   } catch {
     return withoutQuery.slice(idx + marker.length);
   }
+}
+
+function rewriteProfileMediaUrl(url: string | null | undefined, req: Request): string | null {
+  if (!url) return null;
+  const marker = "/object/public/avatars/";
+  const idx = url.indexOf(marker);
+  if (idx !== -1) {
+    const pathParams = url.slice(idx + marker.length);
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.get("host");
+    return `${protocol}://${host}/images/avatars/${pathParams}`;
+  }
+  return url;
 }
 
 // GET /library?type=favoritos  (or 'lendo' or 'lidos')
@@ -97,19 +111,26 @@ app.get("/library", async (req: Request, res: Response) => {
       .select("book_id")
       .eq("user_id", user.id);
 
-    if (idsError) return res.status(500).json({ error: idsError.message });
+    if (idsError) {
+      console.error("❌ Database error /library:", idsError);
+      return res.status(500).json({ error: "Erro ao buscar dados da biblioteca." });
+    }
 
     const ids = (bookIdsData ?? []).map((r: any) => r.book_id).filter(Boolean);
     if (ids.length === 0) return res.json({ books: [] });
 
     // buscar livros por ids
     const { data: books, error: booksError } = await svc.from("books").select("*").in("id", ids);
-    if (booksError) return res.status(500).json({ error: booksError.message });
+    if (booksError) {
+      console.error("❌ Database error /library books:", booksError);
+      return res.status(500).json({ error: "Erro ao carregar livros." });
+    }
 
     return res.json({ books });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -141,16 +162,28 @@ app.post("/library/:type", async (req: Request, res: Response) => {
     if (!bookId) return res.status(400).json({ error: "book_id is required" });
 
     const svc = svcClient();
-    const { error } = await svc.from(tableName).upsert(
-      { user_id: userId, book_id: bookId },
-      { onConflict: "user_id,book_id" }
-    );
 
-    if (error) return res.status(500).json({ error: error.message });
+    // Workaround para "no unique constraint matching ON CONFLICT"
+    const { data: existing } = await svc
+      .from(tableName)
+      .select("id")
+      .eq("user_id", userId)
+      .eq("book_id", bookId)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error } = await svc.from(tableName).insert({ user_id: userId, book_id: bookId });
+      if (error) {
+        console.error("❌ Database error adding to library:", error);
+        return res.status(500).json({ error: "Falha ao adicionar à biblioteca." });
+      }
+    }
+
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -172,8 +205,9 @@ app.delete("/library/:type/:bookId", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -189,15 +223,19 @@ app.get("/me/admin", async (req: Request, res: Response) => {
       .select("role")
       .eq("user_id", user.id);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /me/admin:", error);
+      return res.status(500).json({ error: "Erro ao verificar admin." });
+    }
     const roles = (data ?? [])
       .map((row: any) => (typeof row?.role === "string" ? row.role.trim().toLowerCase() : ""))
       .filter(Boolean);
     const isAdmin = roles.includes("admin") || roles.includes("adm");
     return res.json({ isAdmin });
   } catch (err: any) {
+    console.error("❌ Unexpected error /me/admin:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro na verificação de admin." });
   }
 });
 
@@ -210,10 +248,17 @@ app.get("/me/profile", async (req: Request, res: Response) => {
 
     const { data, error } = await svc.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
+    
+    if (data) {
+      data.avatar_image = rewriteProfileMediaUrl(data.avatar_image, req);
+      data.banner_image = rewriteProfileMediaUrl(data.banner_image, req);
+    }
+    
     return res.json({ profile: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -240,10 +285,17 @@ app.put("/me/profile", async (req: Request, res: Response) => {
       .maybeSingle();
 
     if (error) return res.status(500).json({ error: error.message });
+    
+    if (data) {
+      data.avatar_image = rewriteProfileMediaUrl(data.avatar_image, req);
+      data.banner_image = rewriteProfileMediaUrl(data.banner_image, req);
+    }
+    
     return res.json({ profile: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -266,7 +318,10 @@ app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Req
       .select("username, avatar_image, banner_image")
       .eq("user_id", user.id)
       .maybeSingle();
-    if (pErr) return res.status(500).json({ error: pErr.message });
+    if (pErr) {
+      console.error("❌ Database error /profile-media:", pErr);
+      return res.status(500).json({ error: "Erro ao processar mídia do perfil." });
+    }
 
     const previousUrl = kind === "avatar" ? profile?.avatar_image : profile?.banner_image;
     const oldPath = storageObjectPathFromPublicUrl(previousUrl, PROFILE_MEDIA_BUCKET);
@@ -277,9 +332,12 @@ app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Req
     const { error: upErr } = await svc.storage.from(PROFILE_MEDIA_BUCKET).upload(objectPath, file.buffer, {
       contentType: file.mimetype,
       upsert: true,
-      cacheControl: "3600",
+      cacheControl: "0",
     });
-    if (upErr) return res.status(500).json({ error: upErr.message });
+    if (upErr) {
+      console.error("❌ Storage error /profile-media upload:", upErr);
+      return res.status(500).json({ error: "Erro no upload da imagem." });
+    }
 
     const { data: pub } = svc.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
     const publicUrl = pub.publicUrl;
@@ -300,12 +358,21 @@ app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Req
       .upsert(upsertRow, { onConflict: "user_id" })
       .select("*")
       .maybeSingle();
-    if (saveErr) return res.status(500).json({ error: saveErr.message });
+    if (saveErr) {
+      console.error("❌ Database error /profile-media save:", saveErr);
+      return res.status(500).json({ error: "Erro ao salvar referência da imagem." });
+    }
+    
+    if (saved) {
+      saved.avatar_image = rewriteProfileMediaUrl(saved.avatar_image, req);
+      saved.banner_image = rewriteProfileMediaUrl(saved.banner_image, req);
+    }
 
-    return res.json({ publicUrl, profile: saved });
+    return res.json({ publicUrl: rewriteProfileMediaUrl(publicUrl, req), profile: saved });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -317,11 +384,15 @@ app.get("/me/settings", async (req: Request, res: Response) => {
     const svc = svcClient();
 
     const { data, error } = await svc.from("user_settings").select("*").eq("user_id", user.id).maybeSingle();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /me/settings GET:", error);
+      return res.status(500).json({ error: "Erro ao carregar preferências." });
+    }
     return res.json({ settings: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /me/settings GET:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro no serviço de configurações." });
   }
 });
 
@@ -335,11 +406,13 @@ app.put("/me/settings", async (req: Request, res: Response) => {
     const theme = req.body?.theme;
     const sound_enabled = req.body?.sound_enabled;
     const notifications_enabled = req.body?.notifications_enabled;
+    const new_books_notifications = req.body?.new_books_notifications;
 
     const payload: Record<string, any> = { user_id: user.id };
     if (theme === "light" || theme === "dark") payload.theme = theme;
     if (typeof sound_enabled === "boolean") payload.sound_enabled = sound_enabled;
     if (typeof notifications_enabled === "boolean") payload.notifications_enabled = notifications_enabled;
+    if (typeof new_books_notifications === "boolean") payload.new_books_notifications = new_books_notifications;
 
     const { data, error } = await svc
       .from("user_settings")
@@ -347,11 +420,20 @@ app.put("/me/settings", async (req: Request, res: Response) => {
       .select("*")
       .maybeSingle();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("❌ Database error /me/settings PUT:", error);
+      const isColumnErr = error.message?.includes("column") || error.message?.includes("not found");
+      return res.status(500).json({ 
+        error: isColumnErr 
+          ? "Erro de banco: coluna 'new_books_notifications' não encontrada. Verifique o SQL de migração." 
+          : "Falha ao salvar configurações." 
+      });
+    }
     return res.json({ settings: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /me/settings PUT:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro interno ao salvar preferências." });
   }
 });
 
@@ -371,8 +453,9 @@ app.get("/goals", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ goals: data ?? [] });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -404,8 +487,9 @@ app.post("/goals", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.status(201).json({ goal: data });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -435,8 +519,9 @@ app.patch("/goals/:id", async (req: Request, res: Response) => {
     if (!data) return res.status(404).json({ error: "Not found" });
     return res.json({ goal: data });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -451,8 +536,9 @@ app.delete("/goals/:id", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -474,8 +560,9 @@ app.get("/reading-progress/:bookId", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ progress: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
 });
 
@@ -509,9 +596,140 @@ app.put("/reading-progress/:bookId", async (req: Request, res: Response) => {
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ progress: data ?? null });
   } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: err.message ?? String(err) });
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
   }
+});
+
+// Proxy GET /images/avatars/*
+app.get("/images/avatars/*", async (req: Request, res: Response) => {
+  try {
+    const filePath = req.params[0];
+    if (!filePath) return res.status(400).json({ error: "path is required" });
+
+    const svc = svcClient();
+    const { data: fileData, error: fileError } = await svc.storage.from(PROFILE_MEDIA_BUCKET).download(filePath);
+    if (fileError) {
+      console.error("❌ Storage error /images download:", fileError);
+      return res.status(500).json({ error: "Erro ao baixar imagem." });
+    }
+
+    const ext = filePath.split(".").pop()?.toLowerCase() || "";
+    const contentType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "same-origin");
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    Readable.from(Buffer.from(arrayBuffer)).pipe(res);
+  } catch (err: any) {
+    console.error("❌ Unexpected error /library:", err);
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+  }
+});
+
+// ACHIEVEMENTS
+app.get("/achievements", async (req: Request, res: Response) => {
+  try {
+    const svc = svcClient();
+    const { data, error } = await svc.from("achievements").select("*").order("created_at", { ascending: false });
+    if (error) {
+      console.error("❌ Database error /achievements:", error);
+      return res.status(500).json({ error: "Erro ao buscar conquistas." });
+    }
+    return res.json({ achievements: data ?? [] });
+  } catch (err) {
+    console.error("❌ Unexpected error /achievements:", err);
+    return res.status(500).json({ error: "Erro interno ao listar conquistas." });
+  }
+});
+
+app.post("/me/achievements/:id/toggle", async (req: Request, res: Response) => {
+  try {
+    const authHeader = requireAuthHeader(req);
+    const user = await getUserFromAuthHeader(authHeader);
+    const achievementId = req.params.id;
+    const svc = svcClient();
+
+    const { data: existing } = await svc
+      .from("user_achievements")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("achievement_id", achievementId)
+      .maybeSingle();
+
+    if (existing) {
+      await svc.from("user_achievements").delete().eq("user_id", user.id).eq("achievement_id", achievementId);
+      return res.json({ achieved: false });
+    } else {
+      await svc.from("user_achievements").insert({ user_id: user.id, achievement_id: achievementId });
+      return res.json({ achieved: true });
+    }
+  } catch (err: any) {
+    console.error("❌ Unexpected error /me/achievements/toggle:", err);
+    return res.status(500).json({ error: "Erro ao atualizar conquista." });
+  }
+});
+
+app.post("/admin/achievements", async (req: Request, res: Response) => {
+  try {
+    const authHeader = requireAuthHeader(req);
+    const user = await getUserFromAuthHeader(authHeader);
+    const svc = svcClient();
+
+    const { data: roles } = await svc.from("user_roles").select("role").eq("user_id", user.id);
+    const isAdmin = (roles ?? []).some(r => ["admin", "adm"].includes(r.role?.toLowerCase()));
+    if (!isAdmin) return res.status(403).json({ error: "Privilégios de admin necessários." });
+
+    const { title, description } = req.body;
+    if (!title) return res.status(400).json({ error: "Título é obrigatório." });
+
+    const { data, error } = await svc.from("achievements").insert({ title, description }).select("*").single();
+    if (error) {
+       console.error("❌ Database error /admin/achievements:", error);
+       return res.status(500).json({ error: "Erro ao criar conquista." });
+    }
+    return res.status(201).json({ achievement: data });
+  } catch (err) {
+    console.error("❌ Unexpected error /admin/achievements:", err);
+    return res.status(500).json({ error: "Erro interno de admin." });
+  }
+});
+
+app.get("/me/stats", async (req: Request, res: Response) => {
+  try {
+    const authHeader = requireAuthHeader(req);
+    const user = await getUserFromAuthHeader(authHeader);
+    const svc = svcClient();
+
+    const { data, error } = await svc.from("reading_progress").select("current_page").eq("user_id", user.id);
+    if (error) {
+       console.error("❌ Database error /me/stats:", error);
+       return res.status(500).json({ error: "Erro ao calcular estatísticas." });
+    }
+    const totalPagesRead = (data ?? []).reduce((acc, curr) => acc + (Number(curr.current_page) || 0), 0);
+
+    return res.json({ totalPagesRead });
+  } catch (err) {
+    console.error("❌ Unexpected error /me/stats:", err);
+    return res.status(500).json({ error: "Erro interno de estatísticas." });
+  }
+});
+
+// Middleware de tratamento de erro do Multer (deve ficar após todas as rotas)
+app.use((err: any, _req: Request, res: Response, next: any) => {
+  if (err && err.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "O arquivo é muito grande. O limite máximo é 25MB." });
+    }
+    return res.status(400).json({ error: `Erro no upload: ${err.message}` });
+  }
+  next(err);
 });
 
 const PORT = Number(process.env.PORT ?? 4200);

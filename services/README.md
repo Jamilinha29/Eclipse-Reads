@@ -163,8 +163,10 @@ PORT=4100
 ```env
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_KEY=sua-service-key
+SUPABASE_ANON_KEY=sua-chave-anon
 NODE_ENV=development
 PORT=4000
+CORS_ORIGINS=http://localhost:8080,http://localhost:5173,https://seu-front.vercel.app
 ```
 
 ### library-service.env
