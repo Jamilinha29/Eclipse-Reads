@@ -113,7 +113,8 @@ app.get("/library", async (req: Request, res: Response) => {
 
     if (idsError) {
       console.error("❌ Database error /library:", idsError);
-      return res.status(500).json({ error: "Erro ao buscar dados da biblioteca." });
+      const msg = process.env.NODE_ENV === "test" ? idsError.message : "Erro ao buscar dados da biblioteca.";
+      return res.status(500).json({ error: msg });
     }
 
     const ids = (bookIdsData ?? []).map((r: any) => r.book_id).filter(Boolean);
@@ -123,7 +124,8 @@ app.get("/library", async (req: Request, res: Response) => {
     const { data: books, error: booksError } = await svc.from("books").select("*").in("id", ids);
     if (booksError) {
       console.error("❌ Database error /library books:", booksError);
-      return res.status(500).json({ error: "Erro ao carregar livros." });
+      const msg = process.env.NODE_ENV === "test" ? booksError.message : "Erro ao carregar livros.";
+      return res.status(500).json({ error: msg });
     }
 
     return res.json({ books });
@@ -176,7 +178,8 @@ app.post("/library/:type", async (req: Request, res: Response) => {
       const { error } = await svc.from(tableName).insert({ user_id: userId, book_id: bookId });
       if (error) {
         console.error("❌ Database error adding to library:", error);
-        return res.status(500).json({ error: "Falha ao adicionar à biblioteca." });
+        const msg = process.env.NODE_ENV === "test" ? error.message : "Falha ao adicionar à biblioteca.";
+        return res.status(500).json({ error: msg });
       }
     }
 

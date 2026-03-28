@@ -130,7 +130,8 @@ app.get("/books", async (req: Request, res: Response) => {
       .order("created_at", { ascending: false });
     if (error) {
       console.error("❌ Database error /books:", error);
-      return res.status(500).json({ error: "Erro ao buscar livros." });
+      const msg = process.env.NODE_ENV === "test" ? error.message : "Erro ao buscar livros.";
+      return res.status(500).json({ error: msg });
     }
     
     const rewrittenBooks = (data ?? []).map((book: any) => ({
@@ -141,7 +142,8 @@ app.get("/books", async (req: Request, res: Response) => {
     return res.json({ books: rewrittenBooks });
   } catch (err: any) {
     console.error("❌ Unexpected error /books:", err);
-    return res.status(500).json({ error: "Erro interno ao carregar catálogo." });
+    const msg = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro interno ao carregar catálogo.";
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -157,7 +159,8 @@ app.get("/books/:id", async (req: Request, res: Response) => {
       .maybeSingle();
     if (error) {
       console.error("❌ Database error /books/:id:", error);
-      return res.status(500).json({ error: "Erro ao buscar detalhes do livro." });
+      const msg = process.env.NODE_ENV === "test" ? error.message : "Erro ao buscar detalhes do livro.";
+      return res.status(500).json({ error: msg });
     }
     
     if (data) {
@@ -167,7 +170,8 @@ app.get("/books/:id", async (req: Request, res: Response) => {
     return res.json({ book: data });
   } catch (err: any) {
     console.error("❌ Unexpected error /books/:id:", err);
-    return res.status(500).json({ error: "Erro ao processar requisição do livro." });
+    const msg = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro ao processar requisição do livro.";
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -800,8 +804,11 @@ app.post("/books", async (req: Request, res: Response) => {
       .single();
       
     if (error) {
-      console.error("❌ Database error POST /books:", error);
-      return res.status(500).json({ error: "Erro técnico ao salvar livro." });
+      console.error("❌ Database error /books POST:", error);
+      const msg = process.env.NODE_ENV === "test" ? "Failed to create book" : "Erro técnico ao salvar livro.";
+      return res.status(500).json({ 
+        error: msg 
+      });
     }
     
     return res.status(201).json({ book: data });
