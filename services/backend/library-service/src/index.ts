@@ -6,8 +6,13 @@ import path from "path";
 import multer from "multer";
 import { Readable } from "stream";
 
-// Carrega as variáveis de ambiente do arquivo library-service.env
-dotenv.config({ path: path.join(process.cwd(), '../envs/library-service.env') });
+import { existsSync } from "fs";
+
+// Carrega as variáveis de ambiente do arquivo library-service.env apenas se existir localmente
+const envPath = path.join(process.cwd(), '../envs/library-service.env');
+if (existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
@@ -20,6 +25,15 @@ app.use((_req: Request, res: Response, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+// Middleware para lidar com o prefixo da Vercel
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/library')) {
+    req.url = req.url.slice('/api/library'.length);
+  }
+  if (!req.url.startsWith('/')) req.url = '/' + req.url;
   next();
 });
 
@@ -750,7 +764,7 @@ app.use((err: any, _req: Request, res: Response, next: any) => {
 });
 
 const PORT = Number(process.env.PORT ?? 4200);
-if (NODE_ENV !== "test") {
+if (NODE_ENV !== "test" && !process.env.VERCEL) {
   app.listen(PORT, () => console.log(`library-service listening on ${PORT}`));
 }
 

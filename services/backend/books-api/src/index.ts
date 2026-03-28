@@ -1,11 +1,15 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
+import { existsSync } from "fs";
 
 // Load environment variables from the correct .env file
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-config({ path: resolve(__dirname, "../../envs/books-api.env") });
+const envPath = resolve(__dirname, "../../envs/books-api.env");
+if (existsSync(envPath)) {
+  config({ path: envPath });
+}
 
 import express, { Request, Response } from "express";
 import cors from "cors";
@@ -38,6 +42,15 @@ app.use((_req: Request, res: Response, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+// Middleware para lidar com o prefixo da Vercel
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/books')) {
+    req.url = req.url.slice('/api/books'.length);
+  }
+  if (!req.url.startsWith('/')) req.url = '/' + req.url;
   next();
 });
 
@@ -827,17 +840,16 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
+if (NODE_ENV !== "test" && !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`📚 books-api running on port ${PORT}`);
+    console.log(`🌍 Environment: ${NODE_ENV}`);
+  });
+}
+
 process.on('SIGINT', () => {
   console.log('📴 SIGINT received. Shutting down gracefully...');
   process.exit(0);
 });
-
-if (NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    console.log(`📚 books-api running on port ${PORT}`);
-    console.log(`🌍 Environment: ${NODE_ENV}`);
-    console.log(`🚀 Health check: http://localhost:${PORT}/health`);
-  });
-}
 
 export default app;

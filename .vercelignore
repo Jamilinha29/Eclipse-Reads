@@ -1,5 +1,4 @@
 # Ignorar pastas pesadas para acelerar o import e o build no Vercel
-services/
 tests/
 scripts/
 .github/

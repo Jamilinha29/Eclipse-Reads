@@ -4,14 +4,28 @@ import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
 
-// Carrega as variáveis de ambiente do arquivo auth-proxy.env
-dotenv.config({ path: path.join(process.cwd(), '../envs/auth-proxy.env') });
+import { existsSync } from "fs";
+
+// Carrega as variáveis de ambiente do arquivo auth-proxy.env apenas se existir localmente
+const envPath = path.join(process.cwd(), '../envs/auth-proxy.env');
+if (existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Middleware para lidar com o prefixo da Vercel
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/auth')) {
+    req.url = req.url.slice('/api/auth'.length);
+  }
+  if (!req.url.startsWith('/')) req.url = '/' + req.url;
+  next();
+});
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -50,7 +64,7 @@ app.get("/validate", async (req: Request, res: Response) => {
 
 const PORT = Number(process.env.PORT ?? 4100);
 
-if (NODE_ENV !== "test") {
+if (NODE_ENV !== "test" && !process.env.VERCEL) {
   app.listen(PORT, () => console.log(`auth-proxy listening on ${PORT}`));
 }
 
