@@ -130,7 +130,8 @@ app.get("/library", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -183,7 +184,8 @@ app.post("/library/:type", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -207,7 +209,8 @@ app.delete("/library/:type/:bookId", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -233,9 +236,10 @@ app.get("/me/admin", async (req: Request, res: Response) => {
     const isAdmin = roles.includes("admin") || roles.includes("adm");
     return res.json({ isAdmin });
   } catch (err: any) {
-    console.error("❌ Unexpected error /me/admin:", err);
+    console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro na verificação de admin." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro na verificação de admin.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -258,7 +262,8 @@ app.get("/me/profile", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -295,7 +300,8 @@ app.put("/me/profile", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -372,7 +378,8 @@ app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Req
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -455,7 +462,8 @@ app.get("/goals", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -489,7 +497,8 @@ app.post("/goals", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -521,7 +530,8 @@ app.patch("/goals/:id", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -538,7 +548,8 @@ app.delete("/goals/:id", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -562,7 +573,8 @@ app.get("/reading-progress/:bookId", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -598,7 +610,8 @@ app.put("/reading-progress/:bookId", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
@@ -629,7 +642,8 @@ app.get("/images/avatars/*", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Erro inesperado na biblioteca." });
+    const errorMessage = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro inesperado na biblioteca.";
+    return res.status(status).json({ error: errorMessage });
   }
 });
 
