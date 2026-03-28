@@ -1,0 +1,12 @@
+# Ignorar pastas pesadas para acelerar o import e o build no Vercel
+services/
+tests/
+scripts/
+.github/
+vitest.config.ts
+README.md
+Requisitos_Eclipse_Reads_Atualizado
+node_modules/
+dist/
+.env
+.env.*
