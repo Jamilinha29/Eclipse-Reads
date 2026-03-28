@@ -13,7 +13,7 @@ jobs:
       node-version: ${{ steps.node_version.outputs.node }}
     steps:
       - id: node_version
-        run: echo "::set-output name=node::18"
+        run: echo "::set-output name=node::20"
 
   # ================================
   # INSTALL & TEST ROOT (VITEST)
@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install dependencies
         run: npm ci
@@ -48,7 +48,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install dependencies
         run: |
@@ -85,7 +85,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install dependencies
         run: |
@@ -148,7 +148,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Deploy to Vercel
         working-directory: ./frontend
