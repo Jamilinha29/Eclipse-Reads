@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,11 +39,7 @@ const MySubmissions = () => {
   const navigate = useNavigate();
   const { userId, token } = useAuth();
 
-  useEffect(() => {
-    loadSubmissions();
-  }, [userId]);
-
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
     if (!userId || !token) return;
 
     setLoading(true);
@@ -55,7 +51,11 @@ const MySubmissions = () => {
       console.error(error);
     }
     setLoading(false);
-  };
+  }, [userId, token]);
+
+  useEffect(() => {
+    loadSubmissions();
+  }, [userId, loadSubmissions]);
 
   const handleDelete = async (id: string, filePath: string) => {
     try {

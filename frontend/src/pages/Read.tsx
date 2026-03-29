@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Settings, Menu, Bookmark, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,7 +71,7 @@ const Read = () => {
     };
 
     loadBook();
-  }, [id, navigate]);
+  }, [id, navigate, addToReading, bookLimit]);
 
   useEffect(() => {
     const loadProgress = async () => {
@@ -122,17 +122,17 @@ const Read = () => {
     toast.success(currentlyInRead ? "Removido de lidos" : "Marcado como lido");
   };
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
-  };
+  }, [currentPage, totalPages]);
 
-  const handlePrevPage = () => {
+  const handlePrevPage = useCallback(() => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
-  };
+  }, [currentPage]);
 
   const handleTocLoaded = (items: any[]) => {
     setTocItems(items);
@@ -153,7 +153,7 @@ const Read = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentPage, totalPages, readingMode]);
+  }, [currentPage, totalPages, readingMode, handleNextPage, handlePrevPage]);
 
   if (loading) {
     return (

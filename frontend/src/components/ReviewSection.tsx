@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,15 +27,15 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
   const [userRating, setUserRating] = useState(0);
   const [userComment, setUserComment] = useState("");
 
-  useEffect(() => {
-    loadReviews();
-  }, [bookId]);
-
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     const response = await fetch(`${booksApiBase}/books/${bookId}/reviews`);
     const result = await response.json();
     if (result?.reviews) setReviews(result.reviews);
-  };
+  }, [bookId]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   const handleSubmit = async () => {
     if (!userId || !token) {

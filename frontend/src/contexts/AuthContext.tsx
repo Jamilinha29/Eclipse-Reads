@@ -160,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
-  const saveProfile = async () => {
+  const saveProfile = useCallback(async () => {
     if (!userId || authType === "guest") return;
     const accessToken = session?.access_token ?? null;
     if (!accessToken) return;
@@ -179,7 +179,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Error saving profile:", error);
     }
-  };
+  }, [userId, authType, session?.access_token, username, avatarImage, bannerImage]);
 
   useEffect(() => {
     if (!userId || authType === "guest" || loading || !profileReady || !session?.access_token) return;
@@ -189,7 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [username, avatarImage, bannerImage, userId, authType, loading, profileReady, session?.access_token]);
+  }, [userId, authType, loading, profileReady, session?.access_token, saveProfile]);
 
   const logout = async () => {
     await supabase.auth.signOut();

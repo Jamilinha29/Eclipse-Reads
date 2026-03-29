@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 
@@ -39,10 +39,10 @@ const Settings = () => {
     };
 
     loadSettings();
-  }, [userId, token]);
+  }, [userId, token, setGlobalTheme]);
 
   // Salva configurações via backend
-  const saveSettings = async () => {
+  const saveSettings = useCallback(async () => {
     if (!userId || !token) return;
     try {
       const response = await api.updateMeSettings(
@@ -67,14 +67,14 @@ const Settings = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [userId, token, theme, soundEnabled, newBooksNotifications, toast]);
 
   useEffect(() => {
     setGlobalTheme(theme);
     if (userId) {
       saveSettings();
     }
-  }, [theme, soundEnabled, newBooksNotifications, userId, token]);
+  }, [theme, soundEnabled, newBooksNotifications, userId, token, setGlobalTheme, saveSettings]);
 
   const handleSaveUsername = async () => {
     const name = localUsername.trim();

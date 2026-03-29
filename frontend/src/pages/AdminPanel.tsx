@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -95,12 +95,12 @@ const AdminPanel = () => {
     setBookForms(forms);
   };
 
-  const loadExistingBooks = async () => {
+  const loadExistingBooks = useCallback(async () => {
     const { books } = await api.getBooks();
     applyBooksToState(books || []);
-  };
+  }, []);
 
-  const loadStorageFiles = async () => {
+  const loadStorageFiles = useCallback(async () => {
     if (!token) return;
     setStorageLoading(true);
     try {
@@ -116,13 +116,13 @@ const AdminPanel = () => {
     } finally {
       setStorageLoading(false);
     }
-  };
+  }, [token]);
 
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
     if (!token) return;
     const { submissions: data } = await api.adminGetSubmissions(token);
     setSubmissions(data || []);
-  };
+  }, [token]);
 
   useEffect(() => {
     // Mantém loading até existir token (sessão Supabase ainda carregando)
@@ -143,7 +143,7 @@ const AdminPanel = () => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, loadSubmissions, loadExistingBooks]);
 
   // Verifica parâmetros da URL para a aba inicial
   useEffect(() => {
@@ -154,7 +154,7 @@ const AdminPanel = () => {
       setActiveTab("import");
       loadStorageFiles();
     }
-  }, [token]);
+  }, [token, loadStorageFiles]);
 
   const handleApprove = async (submission: BookSubmission) => {
     if (!token) return;

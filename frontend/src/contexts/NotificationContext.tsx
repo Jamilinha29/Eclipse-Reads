@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -26,7 +26,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [newBooks, setNewBooks] = useState<Book[]>([]);
   const { toast } = useToast();
 
-  const checkNewBooks = async () => {
+  const checkNewBooks = useCallback(async () => {
     if (!userId) return;
 
     try {
@@ -67,7 +67,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error("Erro ao verificar novos livros:", error);
     }
-  };
+  }, [userId, token, toast]);
 
   const resetCount = () => {
     if (!userId) return;
@@ -87,7 +87,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(0);
       setNewBooks([]);
     }
-  }, [userId, token]);
+  }, [userId, token, checkNewBooks]);
 
   return (
     <NotificationContext.Provider value={{ unreadCount, newBooks, resetCount, checkNewBooks }}>
