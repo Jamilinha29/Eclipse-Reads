@@ -7,6 +7,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toastNeedLogin } from "@/lib/loginToast";
 // (não usamos o api.ts aqui porque ele ainda não expõe reviews)
+const booksApiBase =
+  (import.meta.env.VITE_BOOKS_API_URL as string) ||
+  (import.meta.env.VITE_API_URL as string) ||
+  "/api/books";
 
 interface Review {
   id: string;
@@ -28,9 +32,7 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
   }, [bookId]);
 
   const loadReviews = async () => {
-    const response = await fetch(
-      `${(import.meta.env.VITE_BOOKS_API_URL as string) || (import.meta.env.VITE_API_URL as string) || "http://localhost:4000"}/books/${bookId}/reviews`
-    );
+    const response = await fetch(`${booksApiBase}/books/${bookId}/reviews`);
     const result = await response.json();
     if (result?.reviews) setReviews(result.reviews);
   };
@@ -47,11 +49,7 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
     }
 
     try {
-      const base =
-        (import.meta.env.VITE_BOOKS_API_URL as string) ||
-        (import.meta.env.VITE_API_URL as string) ||
-        "http://localhost:4000";
-      const response = await fetch(`${base}/books/${bookId}/reviews`, {
+      const response = await fetch(`${booksApiBase}/books/${bookId}/reviews`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,

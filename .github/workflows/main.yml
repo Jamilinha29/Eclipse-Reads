@@ -7,14 +7,6 @@ on:
     branches: ["main"]
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      node-version: ${{ steps.node_version.outputs.node }}
-    steps:
-      - id: node_version
-        run: echo "::set-output name=node::20"
-
   # ================================
   # INSTALL & TEST ROOT (VITEST)
   # ================================
@@ -98,11 +90,12 @@ jobs:
           npm run build
 
   # ================================
-  # DOCKER BUILD (CI)
+  # DOCKER BUILD (CI) — apenas push em main (evita push de imagens em PR)
   # ================================
   docker:
     runs-on: ubuntu-latest
     needs: [frontend, backend, root-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -136,11 +129,13 @@ jobs:
           docker push $IMAGE_LOWER
 
   # ================================
-  # DEPLOY TO VERCEL (FRONTEND)
+  # DEPLOY TO VERCEL — raiz do repo (api/* + vercel.json + build do frontend)
+  # Não use working-directory: frontend: isso publica só o SPA e perde as rotas serverless.
   # ================================
   deploy-frontend:
     runs-on: ubuntu-latest
-    needs: docker
+    needs: [frontend, backend, root-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +146,5 @@ jobs:
           node-version: 20
 
       - name: Deploy to Vercel
-        working-directory: ./frontend
         run: npx vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
 
