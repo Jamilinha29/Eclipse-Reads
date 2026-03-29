@@ -54,12 +54,19 @@ const Profile = () => {
   // Verifica se o usuário é admin
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId || !token) return;
-      const result = await api.getMeAdmin(token);
-      setIsAdmin(!!result.isAdmin);
+      if (!userId || !token) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        const result = await api.getMeAdmin(token);
+        setIsAdmin(!!result.isAdmin);
+      } catch {
+        setIsAdmin(false);
+      }
     };
 
-    checkAdmin();
+    void checkAdmin();
   }, [userId, token]);
 
   useEffect(() => {

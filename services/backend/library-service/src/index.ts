@@ -30,6 +30,7 @@ app.use((_req: Request, res: Response, next) => {
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
+  console.log(`[Vercel Proxy] Library Service Hit: ${req.url}`);
   if (req.url.startsWith('/api/library')) {
     req.url = req.url.slice('/api/library'.length);
   }
@@ -231,12 +232,34 @@ app.delete("/library/:type/:bookId", async (req: Request, res: Response) => {
   }
 });
 
-// GET /me/admin -> true/false
+function rolesFromUserRolesRows(rows: unknown[]): string[] {
+  return (rows ?? [])
+    .map((row: any) => {
+      const r = row?.role;
+      if (r == null) return "";
+      return String(r).trim().toLowerCase();
+    })
+    .filter(Boolean);
+}
+
+// GET /me/admin -> true/false (requer linha em public.user_roles com role = admin; ver migration app_role)
 app.get("/me/admin", async (req: Request, res: Response) => {
   try {
     const authHeader = requireAuthHeader(req);
     const user = await getUserFromAuthHeader(authHeader);
     const svc = svcClient();
+
+    const { data: rpcHasAdmin, error: rpcError } = await svc.rpc("has_role", {
+      _user_id: user.id,
+      _role: "admin",
+    });
+
+    if (!rpcError && typeof rpcHasAdmin === "boolean") {
+      return res.json({ isAdmin: rpcHasAdmin });
+    }
+    if (rpcError) {
+      console.warn("⚠️ /me/admin has_role RPC fallback:", rpcError.message);
+    }
 
     const { data, error } = await svc
       .from("user_roles")
@@ -247,9 +270,7 @@ app.get("/me/admin", async (req: Request, res: Response) => {
       console.error("❌ Database error /me/admin:", error);
       return res.status(500).json({ error: "Erro ao verificar admin." });
     }
-    const roles = (data ?? [])
-      .map((row: any) => (typeof row?.role === "string" ? row.role.trim().toLowerCase() : ""))
-      .filter(Boolean);
+    const roles = rolesFromUserRolesRows(data ?? []);
     const isAdmin = roles.includes("admin") || roles.includes("adm");
     return res.json({ isAdmin });
   } catch (err: any) {
@@ -713,8 +734,9 @@ app.post("/admin/achievements", async (req: Request, res: Response) => {
     const user = await getUserFromAuthHeader(authHeader);
     const svc = svcClient();
 
-    const { data: roles } = await svc.from("user_roles").select("role").eq("user_id", user.id);
-    const isAdmin = (roles ?? []).some(r => ["admin", "adm"].includes(r.role?.toLowerCase()));
+    const { data: rolesRows } = await svc.from("user_roles").select("role").eq("user_id", user.id);
+    const roleStrs = rolesFromUserRolesRows(rolesRows ?? []);
+    const isAdmin = roleStrs.some((r) => ["admin", "adm"].includes(r));
     if (!isAdmin) return res.status(403).json({ error: "Privilégios de admin necessários." });
 
     const { title, description } = req.body;

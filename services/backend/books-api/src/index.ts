@@ -11,7 +11,7 @@ if (existsSync(envPath)) {
   config({ path: envPath });
 }
 
-import express, { Request, Response } from "express";
+import express, { Request, Response, type RequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { createClient } from "@supabase/supabase-js";
@@ -47,6 +47,7 @@ app.use((_req: Request, res: Response, next) => {
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
+  console.log(`[Vercel Proxy] Books API Hit: ${req.url}`);
   if (req.url.startsWith('/api/books')) {
     req.url = req.url.slice('/api/books'.length);
   }
@@ -104,17 +105,39 @@ async function requireUser(req: Request): Promise<{ id: string; email?: string |
   return { id: data.user.id, email: data.user.email };
 }
 
+function rolesFromUserRolesRows(rows: unknown[]): string[] {
+  return (rows ?? [])
+    .map((row: any) => {
+      const r = row?.role;
+      if (r == null) return "";
+      return String(r).trim().toLowerCase();
+    })
+    .filter(Boolean);
+}
+
 async function requireAdmin(req: Request): Promise<{ id: string }> {
   const user = await requireUser(req);
+
+  const { data: rpcHasAdmin, error: rpcError } = await supabase.rpc("has_role", {
+    _user_id: user.id,
+    _role: "admin",
+  });
+
+  if (!rpcError && typeof rpcHasAdmin === "boolean") {
+    if (!rpcHasAdmin) throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+    return user;
+  }
+  if (rpcError) {
+    console.warn("⚠️ requireAdmin has_role RPC fallback:", rpcError.message);
+  }
+
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id);
   if (error) throw Object.assign(new Error(error.message), { statusCode: 500 });
 
-  const roles = (data ?? [])
-    .map((row: any) => (typeof row?.role === "string" ? row.role.trim().toLowerCase() : ""))
-    .filter(Boolean);
+  const roles = rolesFromUserRolesRows(data ?? []);
   const isAdmin = roles.includes("admin") || roles.includes("adm");
 
   if (!isAdmin) throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
@@ -245,7 +268,7 @@ app.get("/books/:id/file", async (req: Request, res: Response) => {
 });
 
 // POST /submissions -> cria submissão + upload no bucket books (multipart/form-data)
-app.post("/submissions", upload.single("file"), async (req: Request, res: Response) => {
+app.post("/submissions", upload.single("file") as unknown as RequestHandler, async (req: Request, res: Response) => {
   requests++;
   try {
     const user = await requireUser(req);
@@ -509,7 +532,7 @@ app.get("/admin/storage/books/download", async (req: Request, res: Response) => 
   }
 });
 
-app.post("/admin/storage/books/cover", uploadCover.single("file"), async (req: Request, res: Response) => {
+app.post("/admin/storage/books/cover", uploadCover.single("file") as unknown as RequestHandler, async (req: Request, res: Response) => {
   requests++;
   try {
     await requireAdmin(req);

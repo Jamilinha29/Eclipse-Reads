@@ -20,6 +20,7 @@ app.use(express.json());
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
+  console.log(`[Vercel Proxy] Auth Proxy Hit: ${req.url}`);
   if (req.url.startsWith('/api/auth')) {
     req.url = req.url.slice('/api/auth'.length);
   }

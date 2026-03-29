@@ -20,13 +20,19 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
         return;
       }
 
-      const result = await api.getMeAdmin(token);
-      setIsAdmin(!!result.isAdmin);
-      setChecking(false);
+      try {
+        const result = await api.getMeAdmin(token);
+        setIsAdmin(!!result.isAdmin);
+      } catch (e) {
+        console.error("getMeAdmin:", e);
+        setIsAdmin(false);
+      } finally {
+        setChecking(false);
+      }
     };
 
     if (!authLoading) {
-      checkAdmin();
+      void checkAdmin();
     }
   }, [userId, token, authLoading]);
 
