@@ -24,16 +24,25 @@ app.disable("x-powered-by");
 // Middleware configuration
 app.use(express.json({ limit: '10mb' })); // Limite para uploads de arquivos
 app.use(morgan("dev"));
-const defaultDevOrigins = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"];
-const configuredOrigins = (process.env.CORS_ORIGINS ?? "")
-  .split(",")
-  .map((v) => v.trim())
-  .filter(Boolean);
-const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultDevOrigins;
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://eclipse-reads.vercel.app"
+];
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function(origin, callback) {
+      // Permite requisições sem origem (como ferramentas no backend) ou origens na lista
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Bloqueado pela política de CORS'));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
     credentials: true,
   })
 );

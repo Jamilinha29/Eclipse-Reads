@@ -18,7 +18,28 @@ const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 const app = express();
 app.disable("x-powered-by");
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://eclipse-reads.vercel.app"
+];
+
+app.use(
+  cors({
+    origin: function(origin, callback) {
+      // Permite requisições sem origem (como ferramentas no backend) ou origens na lista
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Bloqueado pela política de CORS'));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use((_req: Request, res: Response, next) => {
   res.setHeader("Referrer-Policy", "same-origin");
