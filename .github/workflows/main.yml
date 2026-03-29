@@ -107,25 +107,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_PAT }}
 
+      - name: Define Docker cache mode
+        run: |
+          if [ "${{ github.run_attempt }}" -gt 1 ]; then
+            echo "DOCKER_NO_CACHE=--no-cache" >> $GITHUB_ENV
+            echo "Re-run detected (attempt ${{ github.run_attempt }}): enabling --no-cache"
+          else
+            echo "DOCKER_NO_CACHE=" >> $GITHUB_ENV
+            echo "First attempt: using Docker layer cache"
+          fi
+
       - name: Build & Push Books API
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/books-api:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build -t $IMAGE_LOWER ./services/backend/books-api
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/books-api
           docker push $IMAGE_LOWER
 
       - name: Build & Push Auth Proxy
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/auth-proxy:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build -t $IMAGE_LOWER ./services/backend/auth-proxy
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/auth-proxy
           docker push $IMAGE_LOWER
 
       - name: Build & Push Library Service
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/library-service:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build -t $IMAGE_LOWER ./services/backend/library-service
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/library-service
           docker push $IMAGE_LOWER
 
   # ================================
