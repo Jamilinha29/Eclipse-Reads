@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, type RequestHandler } from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
@@ -344,7 +344,10 @@ app.put("/me/profile", async (req: Request, res: Response) => {
 });
 
 // POST /me/profile-media — upload avatar/banner no bucket avatars (sem Supabase no browser)
-app.post("/me/profile-media", profileMediaUpload.single("file"), async (req: Request, res: Response) => {
+app.post(
+  "/me/profile-media",
+  profileMediaUpload.single("file") as unknown as RequestHandler,
+  async (req: Request, res: Response) => {
   try {
     const authHeader = requireAuthHeader(req);
     const user = await getUserFromAuthHeader(authHeader);
