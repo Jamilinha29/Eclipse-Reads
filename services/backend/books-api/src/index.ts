@@ -165,13 +165,15 @@ app.get("/metrics", (_req: Request, res: Response) => {
   return res.json({ requests });
 });
 
-// GET /books -> retorna todos os livros (ordenado por created_at desc)
+// GET /books -> catálogo público: apenas livros realmente importados (com arquivo vinculado)
 app.get("/books", async (req: Request, res: Response) => {
   requests++;
   try {
     const { data, error } = await supabase
       .from("books")
       .select("id, title, author, category, cover_image, rating, age_rating, created_at")
+      .not("file_path", "is", null)
+      .neq("file_path", "")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("❌ Database error /books:", error);
