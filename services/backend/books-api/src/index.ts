@@ -171,9 +171,7 @@ app.get("/books", async (req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from("books")
-      .select("id, title, author, category, cover_image, rating, age_rating, created_at")
-      .not("file_path", "is", null)
-      .neq("file_path", "")
+      .select("id, title, author, category, cover_image, rating, age_rating, created_at, file_path")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("❌ Database error /books:", error);
@@ -181,10 +179,18 @@ app.get("/books", async (req: Request, res: Response) => {
       return res.status(500).json({ error: msg });
     }
     
-    const rewrittenBooks = (data ?? []).map((book: any) => ({
-      ...book,
-      cover_image: rewriteBookUrl(book.cover_image, req),
-    }));
+    const importedBooks = (data ?? []).filter((book: any) => {
+      const filePath = typeof book?.file_path === "string" ? book.file_path.trim() : "";
+      return filePath.length > 0;
+    });
+
+    const rewrittenBooks = importedBooks.map((book: any) => {
+      const { file_path: _filePath, ...publicBook } = book;
+      return {
+        ...publicBook,
+        cover_image: rewriteBookUrl(publicBook.cover_image, req),
+      };
+    });
 
     return res.json({ books: rewrittenBooks });
   } catch (err: any) {
