@@ -43,6 +43,14 @@ const isRedirectConfigError = (message: string | undefined) => {
   );
 };
 
+const isAlreadyRegisteredError = (message: string | undefined) =>
+  (message || "").toLowerCase().includes("already registered");
+
+const isEmailNotConfirmedError = (message: string | undefined) => {
+  const normalizedMessage = (message || "").toLowerCase();
+  return normalizedMessage.includes("email not confirmed") || normalizedMessage.includes("not confirmed");
+};
+
 const Auth = () => {
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true");
   const [email, setEmail] = useState("");
@@ -55,6 +63,27 @@ const Auth = () => {
   const { setAuthType, setUserId, isLoggedIn, authType } = useAuth();
   const navigate = useNavigate();
   const authClient = supabase.auth as any;
+
+  const resendConfirmationEmail = async (targetEmail: string, redirectUrl: string) => {
+    if (typeof authClient.resend !== "function") {
+      return { error: { message: "Reenvio não disponível nesta versão do cliente." } };
+    }
+
+    let resendResponse = await authClient.resend({
+      type: "signup",
+      email: targetEmail,
+      options: { emailRedirectTo: redirectUrl },
+    });
+
+    if (isRedirectConfigError(resendResponse.error?.message)) {
+      resendResponse = await authClient.resend({
+        type: "signup",
+        email: targetEmail,
+      });
+    }
+
+    return resendResponse;
+  };
 
   // Link antigo de recuperação que apontava para /auth: envia para a página correta (mantém o hash).
   useEffect(() => {
@@ -102,6 +131,17 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      if (isEmailNotConfirmedError(error.message)) {
+        const redirectUrl = `${window.location.origin}/auth`;
+        const resendResponse = await resendConfirmationEmail(email, redirectUrl);
+        if (resendResponse.error) {
+          toast.error("Seu e-mail ainda não foi confirmado. Não foi possível reenviar agora.");
+        } else {
+          toast.error("Seu e-mail ainda não foi confirmado. Reenviamos o link de confirmação.");
+        }
+        return;
+      }
+
       if (error.message.includes("Invalid login credentials")) {
         toast.error("E-mail ou senha incorretos");
       } else {
@@ -180,8 +220,13 @@ const Auth = () => {
     const { data: signData, error } = signUpResponse;
 
     if (error) {
-      if (error.message.includes("already registered")) {
-        toast.error("Este e-mail já está cadastrado");
+      if (isAlreadyRegisteredError(error.message)) {
+        const resendResponse = await resendConfirmationEmail(email, redirectUrl);
+        if (resendResponse.error) {
+          toast.error("Este e-mail já está cadastrado. Tente fazer login ou recuperar senha.");
+        } else {
+          toast.success("Este e-mail já existe. Reenviamos o e-mail de confirmação.");
+        }
       } else {
         toast.error("Erro ao criar conta: " + error.message);
       }
