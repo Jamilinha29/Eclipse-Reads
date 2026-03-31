@@ -83,14 +83,25 @@ const upload = multer({
 
 function rewriteBookUrl(url: string | null | undefined, req: Request): string | null {
   if (!url) return null;
-  const marker = "/object/public/books/";
-  const idx = url.indexOf(marker);
-  if (idx !== -1) {
-    const pathParams = url.slice(idx + marker.length);
-    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
-    const host = req.get("host");
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+  const host = req.get("host");
+
+  // URL pública padrão do Supabase Storage
+  const storageMarker = "/object/public/books/";
+  const storageIdx = url.indexOf(storageMarker);
+  if (storageIdx !== -1) {
+    const pathParams = url.slice(storageIdx + storageMarker.length);
     return `${protocol}://${host}/images/books/${pathParams}`;
   }
+
+  // URLs antigas já proxied (ex.: localhost/images/books/...) devem ser reescritas para o host atual
+  const proxyMarker = "/images/books/";
+  const proxyIdx = url.indexOf(proxyMarker);
+  if (proxyIdx !== -1) {
+    const pathParams = url.slice(proxyIdx + proxyMarker.length);
+    return `${protocol}://${host}/images/books/${pathParams}`;
+  }
+
   return url;
 }
 
@@ -184,13 +195,10 @@ app.get("/books", async (req: Request, res: Response) => {
       return filePath.length > 0;
     });
 
-    const rewrittenBooks = importedBooks.map((book: any) => {
-      const { file_path: _filePath, ...publicBook } = book;
-      return {
-        ...publicBook,
-        cover_image: rewriteBookUrl(publicBook.cover_image, req),
-      };
-    });
+    const rewrittenBooks = importedBooks.map((book: any) => ({
+      ...book,
+      cover_image: rewriteBookUrl(book.cover_image, req),
+    }));
 
     return res.json({ books: rewrittenBooks });
   } catch (err: any) {
