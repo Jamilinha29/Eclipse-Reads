@@ -183,18 +183,27 @@ PORT=4200
 
 Os testes estão localizados na pasta `tests/` na raiz do projeto:
 
-### Testes de Tolerância a Falhas
+### Testes por funcionalidade
 
 ```powershell
-npm test tests/fault-tolerance/auth-proxy.test.ts
-npm test tests/fault-tolerance/books-api.test.ts
-npm test tests/fault-tolerance/library-service.test.ts
+npm run test:auth
+npm run test:cadastro
+npm run test:upload
+npm run test:perfil
+npm test
+```
+
+### Testes com Docker
+
+```powershell
+npm run test:docker
+npm run test:docker:down
 ```
 
 ### Testes de Carga
 
 ```powershell
-k6 run tests/load/teste-carga-completo.js
+k6 run -e SUPABASE_URL=https://seu-projeto.supabase.co -e SUPABASE_KEY=sua-chave-anon tests/load/teste-carga-completo.js
 ```
 
 ## 📊 Healthchecks e Monitoramento

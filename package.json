@@ -20,7 +20,15 @@
     "install:backends": "npm install --prefix services/backend/auth-proxy && npm install --prefix services/backend/books-api && npm install --prefix services/backend/library-service",
     "install:all": "npm run install:frontend && npm run install:backends",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:auth": "vitest run tests/auth",
+    "test:cadastro": "vitest run tests/cadastro",
+    "test:upload": "vitest run tests/upload",
+    "test:perfil": "vitest run tests/perfil",
+    "test:one-by-one": "node scripts/run-tests-sequential.mjs",
+    "test:docker": "docker-compose -f docker-compose.tests.yml up --build --abort-on-container-exit --exit-code-from tests",
+    "test:docker:one-by-one": "docker-compose -f docker-compose.tests.yml run --rm tests npm run test:one-by-one",
+    "test:docker:down": "docker-compose -f docker-compose.tests.yml down --remove-orphans"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",

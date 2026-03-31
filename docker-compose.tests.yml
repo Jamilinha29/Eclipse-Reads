@@ -1,0 +1,9 @@
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    command: npm test
+    environment:
+      NODE_ENV: test
+

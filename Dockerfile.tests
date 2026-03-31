@@ -1,0 +1,16 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./frontend/
+COPY services/backend/auth-proxy/package.json services/backend/auth-proxy/package-lock.json* ./services/backend/auth-proxy/
+COPY services/backend/books-api/package.json services/backend/books-api/package-lock.json* ./services/backend/books-api/
+COPY services/backend/library-service/package.json services/backend/library-service/package-lock.json* ./services/backend/library-service/
+
+RUN npm install
+
+COPY . .
+
+CMD ["npm", "test"]
+
