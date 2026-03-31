@@ -9,6 +9,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 
+const isRedirectConfigError = (message: string | undefined) => {
+  if (!message) return false;
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("redirect") &&
+    (normalizedMessage.includes("not allowed") ||
+      normalizedMessage.includes("invalid") ||
+      normalizedMessage.includes("mismatch"))
+  );
+};
+
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,11 +37,16 @@ const ForgotPassword = () => {
     setLoading(true);
     const redirectUrl = `${window.location.origin}/reset-password`;
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    let resetResponse = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
     });
 
+    if (isRedirectConfigError(resetResponse.error?.message)) {
+      resetResponse = await supabase.auth.resetPasswordForEmail(email);
+    }
+
     setLoading(false);
+    const { error } = resetResponse;
 
     if (error) {
       toast.error("Erro ao enviar e-mail: " + error.message);

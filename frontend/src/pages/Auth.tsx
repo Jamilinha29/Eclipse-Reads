@@ -32,6 +32,17 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const isRedirectConfigError = (message: string | undefined) => {
+  if (!message) return false;
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("redirect") &&
+    (normalizedMessage.includes("not allowed") ||
+      normalizedMessage.includes("invalid") ||
+      normalizedMessage.includes("mismatch"))
+  );
+};
+
 const Auth = () => {
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true");
   const [email, setEmail] = useState("");
@@ -142,7 +153,7 @@ const Auth = () => {
     // Rota pública: evita perder o hash de confirmação ao passar por rotas protegidas.
     const redirectUrl = `${window.location.origin}/auth`;
 
-    const { data: signData, error } = await authClient.signUp({
+    let signUpResponse = await authClient.signUp({
       email,
       password,
       options: {
@@ -153,7 +164,20 @@ const Auth = () => {
       },
     });
 
+    if (isRedirectConfigError(signUpResponse.error?.message)) {
+      signUpResponse = await authClient.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: normalizedName,
+          },
+        },
+      });
+    }
+
     setLoading(false);
+    const { data: signData, error } = signUpResponse;
 
     if (error) {
       if (error.message.includes("already registered")) {
