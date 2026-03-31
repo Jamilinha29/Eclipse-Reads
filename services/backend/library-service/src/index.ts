@@ -94,6 +94,20 @@ const getUserFromAuthHeader = async (authHeader: string) => {
 const svcClient = () => createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const PROFILE_MEDIA_BUCKET = "avatars";
+const USERNAME_ALLOWED_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s]+$/u;
+
+const normalizeUsername = (value: string) => value.replace(/\s+/g, " ").trim();
+const isValidUsername = (value: string) => {
+  const normalized = normalizeUsername(value);
+  return normalized.length >= 3 && USERNAME_ALLOWED_REGEX.test(normalized);
+};
+
+const sanitizeFallbackUsername = (value: string) => {
+  const lettersOnly = value.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/gu, " ");
+  const normalized = normalizeUsername(lettersOnly);
+  return normalized || "Usuario";
+};
+
 const profileMediaUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
@@ -333,12 +347,21 @@ app.put("/me/profile", async (req: Request, res: Response) => {
     const user = await getUserFromAuthHeader(authHeader);
     const svc = svcClient();
 
-    const username = typeof req.body?.username === "string" ? req.body.username.trim() : undefined;
+    const usernameRaw = typeof req.body?.username === "string" ? req.body.username : undefined;
     const avatar_image = typeof req.body?.avatar_image === "string" ? req.body.avatar_image : undefined;
     const banner_image = typeof req.body?.banner_image === "string" ? req.body.banner_image : undefined;
 
     const payload: Record<string, any> = { user_id: user.id };
-    if (username !== undefined) payload.username = username;
+    if (usernameRaw !== undefined) {
+      const username = normalizeUsername(usernameRaw);
+      if (!isValidUsername(username)) {
+        return res.status(400).json({
+          error:
+            "Nome de usuário inválido. Use apenas letras e espaços (mínimo de 3 caracteres).",
+        });
+      }
+      payload.username = username;
+    }
     if (avatar_image !== undefined) payload.avatar_image = avatar_image;
     if (banner_image !== undefined) payload.banner_image = banner_image;
 
@@ -410,9 +433,11 @@ app.post(
     const { data: pub } = svc.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectPath);
     const publicUrl = pub.publicUrl;
 
-    const fallbackName = user.email?.split("@")[0]?.trim() || "Usuário";
+    const fallbackName = sanitizeFallbackUsername(user.email?.split("@")[0] ?? "");
     const username =
-      typeof profile?.username === "string" && profile.username.trim() ? profile.username.trim() : fallbackName;
+      typeof profile?.username === "string" && isValidUsername(profile.username)
+        ? normalizeUsername(profile.username)
+        : fallbackName;
 
     const upsertRow: Record<string, unknown> = {
       user_id: user.id,

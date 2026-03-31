@@ -17,6 +17,11 @@ import {
 import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
 import { UserRound } from "lucide-react";
 import { toast } from "sonner";
+import {
+  isValidUsername,
+  normalizeUsername,
+  USERNAME_VALIDATION_MESSAGE,
+} from "@/lib/usernameValidation";
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
@@ -127,6 +132,12 @@ const Auth = () => {
       return;
     }
 
+    const normalizedName = normalizeUsername(name);
+    if (!isValidUsername(normalizedName)) {
+      toast.error(`Nome de usuário inválido. ${USERNAME_VALIDATION_MESSAGE}`);
+      return;
+    }
+
     setLoading(true);
     // Rota pública: evita perder o hash de confirmação ao passar por rotas protegidas.
     const redirectUrl = `${window.location.origin}/auth`;
@@ -137,7 +148,7 @@ const Auth = () => {
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          full_name: name,
+          full_name: normalizedName,
         },
       },
     });

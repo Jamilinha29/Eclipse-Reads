@@ -9,6 +9,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
+import {
+  isValidUsername,
+  normalizeUsername,
+  USERNAME_VALIDATION_MESSAGE,
+} from "@/lib/usernameValidation";
 
 const Settings = () => {
   const { username, setUsername, userId, token, theme: globalTheme, setTheme: setGlobalTheme } = useAuth();
@@ -77,9 +82,17 @@ const Settings = () => {
   }, [theme, soundEnabled, newBooksNotifications, userId, token, setGlobalTheme, saveSettings]);
 
   const handleSaveUsername = async () => {
-    const name = localUsername.trim();
+    const name = normalizeUsername(localUsername);
     if (!name) {
       toast({ title: "Digite um nome válido", variant: "destructive" });
+      return;
+    }
+    if (!isValidUsername(name)) {
+      toast({
+        title: "Nome de usuário inválido",
+        description: USERNAME_VALIDATION_MESSAGE,
+        variant: "destructive",
+      });
       return;
     }
     if (!userId || !token) {

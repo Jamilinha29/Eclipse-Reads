@@ -8,15 +8,21 @@ import {
 import { THEME_STORAGE_KEY, getStoredTheme } from "@/lib/themeStorage";
 import { api } from "@/lib/api";
 import { User, Session } from "@supabase/supabase-js";
+import { isValidUsername, normalizeUsername } from "@/lib/usernameValidation";
 
 type AuthType = "guest" | "email" | "google" | null;
 
 function getDisplayNameFromUser(currentUser: User | null): string {
   if (!currentUser) return "Usuário";
   const fullName = currentUser.user_metadata?.full_name;
-  if (typeof fullName === "string" && fullName.trim()) return fullName.trim();
+  if (typeof fullName === "string" && isValidUsername(fullName)) {
+    return normalizeUsername(fullName);
+  }
   const emailName = currentUser.email?.split("@")[0];
-  if (emailName && emailName.trim()) return emailName.trim();
+  if (emailName) {
+    const lettersOnly = normalizeUsername(emailName.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/gu, " "));
+    if (isValidUsername(lettersOnly)) return lettersOnly;
+  }
   return "Usuário";
 }
 
