@@ -205,6 +205,7 @@ const Auth = () => {
     });
 
     if (isRedirectConfigError(signUpResponse.error?.message)) {
+      console.log("⚠️ [Auth Debug] Erro de Redirect detectado, tentando sem emailRedirectTo...", signUpResponse.error);
       signUpResponse = await authClient.signUp({
         email,
         password,
@@ -218,6 +219,8 @@ const Auth = () => {
 
     setLoading(false);
     const { data: signData, error } = signUpResponse;
+
+    console.log("🚨 [Auth Debug] Resposta completa do Supabase signUp:", { signData, error });
 
     if (error) {
       if (isAlreadyRegisteredError(error.message)) {
