@@ -22,6 +22,7 @@ import {
   normalizeUsername,
   USERNAME_VALIDATION_MESSAGE,
 } from "@/lib/usernameValidation";
+import { signupPasswordMeetsMinimum } from "@/lib/passwordPolicy";
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
@@ -178,7 +179,7 @@ const Auth = () => {
       return;
     }
 
-    if (password.length < 6) {
+    if (!signupPasswordMeetsMinimum(password)) {
       toast.error("A senha deve ter no mínimo 6 caracteres");
       return;
     }

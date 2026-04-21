@@ -4,6 +4,7 @@ import { supabaseCreateClientMock } from "../mocks/supabaseRegistry";
 import { loadBooksApi } from "../helpers/loadApps";
 import { createBooksSupabaseMock } from "../helpers/supabaseFactories";
 
+/** Exceção na listagem GET /books (rede/timeout simulado). */
 describe("cadastro/senha", () => {
   it("mantém o serviço vivo quando ocorre exceção inesperada em /books", async () => {
     const supabaseMock = createBooksSupabaseMock({

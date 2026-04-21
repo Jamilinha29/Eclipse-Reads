@@ -1,89 +1,75 @@
 # Tests - Eclipse Reads
 
-Este diretório contém testes organizados por funcionalidade em arquivos independentes, para facilitar rastreabilidade, manutenção e execução isolada.
+Testes automatizados (Vitest + Supertest), regras de UI espelhadas onde não há API dedicada, e scripts K6 para carga. Os backends são carregados via `import()` com mocks de `@supabase/supabase-js` (`tests/setup.ts` + shim).
 
-## Estrutura modular
+## Estrutura
 
 ```
 tests/
+├── api/                    # Contratos HTTP dos microserviços (prioridade)
 ├── auth/
-│   ├── login-email.test.ts
-│   ├── login-google.test.ts
-│   └── guest-access.test.ts
 ├── cadastro/
-│   ├── cadastro-email.test.ts
-│   ├── senha.test.ts
-│   └── confirmacao-senha.test.ts
 ├── upload/
-│   ├── upload-valido.test.ts
-│   ├── upload-invalido.test.ts
-│   └── formato.test.ts
 ├── perfil/
-│   ├── avatar.test.ts
-│   └── exibicao-dados.test.ts
+├── users/                  # Caixa branca (ex.: usernameValidation importado do frontend)
 ├── helpers/
-│   ├── loadApps.ts
-│   └── supabaseFactories.ts
 ├── mocks/
-│   ├── supabase-js-test-shim.ts
-│   └── supabaseRegistry.ts
+├── load/                   # K6 (opcional; exige binário k6 instalado)
 ├── setup-env.ts
-├── setup.ts
-└── load/
-    └── teste-carga-completo.js
+└── setup.ts
 ```
 
-## Princípios adotados
+## Comandos
 
-- Um arquivo por cenário (execução independente).
-- Agrupamento por domínio funcional.
-- Helpers compartilhados para evitar duplicação.
-- Isolamento de falhas por caso de teste.
+| Comando | Descrição |
+|--------|-----------|
+| `npm test` | Toda a suíte Vitest |
+| `npm run test:coverage` | Cobertura v8 nos `services/backend/*/src` (limiares no `vitest.config.ts`) |
+| `npm run test:api` | Só `tests/api/**` |
+| `npm run test:auth` | `tests/auth/**` |
+| `npm run test:cadastro` | `tests/cadastro/**` |
+| `npm run test:upload` | `tests/upload/**` |
+| `npm run test:perfil` | `tests/perfil/**` |
+| `npm run test:users` | `tests/users/**` |
+| `npm run test:one-by-one` | Cada ficheiro `.test.ts` isolado (scripts/run-tests-sequential.mjs) |
+| `npm run test:load:books-api` | K6 contra `BOOKS_API_BASE_URL` (obrigatório) |
+| `npm run test:load:supabase` | K6 contra PostgREST (`SUPABASE_URL` + `SUPABASE_KEY`) |
+| `npm run test:e2e` | Playwright (`e2e/`) — opt-in: `PLAYWRIGHT_RUN=1` e frontend em execução |
 
-## Execução local
+## Variáveis úteis (uploads)
+
+- `BOOKS_SUBMISSION_MAX_BYTES` — limite POST `/submissions` (bytes); padrão 50MB.
+- `PROFILE_MEDIA_MAX_BYTES` — limite POST `/me/profile-media` (bytes); padrão 25MB.
+
+## E2E (Playwright)
 
 ```powershell
-npm install
-npm test
+npx playwright install
+cd frontend; npm run dev
+# noutro terminal, na raiz do repo:
+set PLAYWRIGHT_RUN=1
+npm run test:e2e
 ```
 
-Executar por funcionalidade:
+## Carga (K6)
+
+Instale o [k6](https://k6.io/docs/get-started/installation/). Os scripts **não** contêm segredos — passe variáveis no CLI.
+
+Exemplo microserviços locais:
 
 ```powershell
-npm run test:auth
-npm run test:cadastro
-npm run test:upload
-npm run test:perfil
+k6 run tests/load/k6-books-api.js -e BOOKS_API_BASE_URL=http://localhost:4000 -e LIBRARY_SERVICE_URL=http://localhost:4200 -e AUTH_PROXY_URL=http://localhost:4100
 ```
 
-Executar todos os testes um por vez:
-
-```powershell
-npm run test:one-by-one
-```
-
-## Execução no Docker
-
-Com a configuração adicionada em `Dockerfile.tests` e `docker-compose.tests.yml`:
+## Docker
 
 ```powershell
 npm run test:docker
-```
-
-Executar no Docker um por vez:
-
-```powershell
 npm run test:docker:one-by-one
-```
-
-Encerrar e limpar:
-
-```powershell
 npm run test:docker:down
 ```
 
-## Observações
+## Notas
 
-- O `vitest.config.ts` continua com `include: ["tests/**/*.test.ts"]`.
-- A suíte mantém compatibilidade com os mocks já usados para `@supabase/supabase-js`.
-- Os testes de carga (`tests/load`) continuam separados e opcionais.
+- `vitest.config.ts`: alias `@` → `frontend/src` para testar utilitários partilhados; cobertura limitada aos três serviços Express em `services/backend`.
+- Cadastro/login “real” (OAuth Google, e-mail já existente) é tratado no **Supabase** e no **frontend** (`Auth.tsx`); onde não há endpoint próprio, usamos regras espelhadas em teste ou mocks.

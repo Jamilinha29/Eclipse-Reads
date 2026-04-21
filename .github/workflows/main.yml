@@ -150,12 +150,15 @@ jobs:
   # DEPLOY TO VERCEL — raiz do repo (api/* + vercel.json + build do frontend)
   # Não use working-directory: frontend: isso publica só o SPA e perde as rotas serverless.
   # ================================
+  # Deploy Vercel desligado no CI até reativar manualmente (veja `if` abaixo).
   deploy-frontend:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: [frontend, backend, root-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Para voltar a publicar na Vercel: use `secrets.VERCEL_TOKEN` e troque por:
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: false
 
     steps:
       - uses: actions/checkout@v4

@@ -6,6 +6,10 @@ export type BooksMockConfig = {
   listResult?: () => SupabaseResult;
   singleResult?: () => SupabaseResult;
   insertResult?: () => SupabaseResult;
+  /** POST /submissions → insert em `book_submissions` (select → maybeSingle). */
+  submissionInsertResult?: () => SupabaseResult;
+  /** Retorno de `storage.from("books").upload` (apenas campo `error`). */
+  storageUploadResult?: () => Promise<{ error: { message: string } | null }>;
 };
 
 export type LibraryServiceConfig = {
@@ -13,7 +17,7 @@ export type LibraryServiceConfig = {
   booksResult?: () => SupabaseResult<Array<Record<string, unknown>>>;
 };
 
-export const authenticatedUser = { user: { id: "tester" } };
+export const authenticatedUser = { user: { id: "tester", email: "tester@example.com" } };
 
 export const createAuthClient = (resolver: () => SupabaseResult<{ user: Record<string, unknown> | null }>) => ({
   auth: {
@@ -31,6 +35,20 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
   const listResult = config.listResult ?? (() => Promise.resolve({ data: [], error: null }));
   const singleResult = config.singleResult ?? (() => Promise.resolve({ data: { id: "1" }, error: null }));
   const insertResult = config.insertResult ?? (() => Promise.resolve({ data: { id: "generated" }, error: null }));
+  const submissionInsertResult =
+    config.submissionInsertResult ??
+    (() =>
+      Promise.resolve({
+        data: {
+          id: "sub-1",
+          user_id: "user-1",
+          status: "pending",
+          file_path: "user-1/file.pdf",
+          file_type: "pdf",
+        },
+        error: null,
+      }));
+  const storageUploadResult = config.storageUploadResult ?? (() => Promise.resolve({ error: null }));
 
   const createSelectBuilder = () => {
     const builder: {
@@ -56,35 +74,100 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
   const storageFrom = vi.fn(() => ({
     list: vi.fn(() => Promise.resolve({ data: [], error: null })),
     download: vi.fn(() => Promise.resolve({ data: null, error: { message: "no file" } })),
-    upload: vi.fn(() => Promise.resolve({ error: null })),
+    upload: vi.fn().mockImplementation(() => storageUploadResult()),
     getPublicUrl: vi.fn(() => ({ data: { publicUrl: "http://test" } })),
     remove: vi.fn(() => Promise.resolve({ error: null })),
   }));
 
   return {
     from: vi.fn().mockImplementation((table: string) => {
-      if (table !== "books") {
-        throw new Error(`Unexpected table ${table}`);
+      if (table === "book_submissions") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockImplementation(() => submissionInsertResult()),
+            }),
+          }),
+        };
       }
 
-      return {
-        select: vi.fn().mockImplementation(() => createSelectBuilder()),
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockImplementation(() => insertResult()),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+      if (table === "books") {
+        return {
+          select: vi.fn().mockImplementation(() => createSelectBuilder()),
+          insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockImplementation(() => singleResult()),
+              single: vi.fn().mockImplementation(() => insertResult()),
             }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockImplementation(() => singleResult()),
+              }),
+            }),
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    }),
+    storage: {
+      from: storageFrom,
+    },
+  };
+};
+
+export type LibraryProfileMockConfig = {
+  profileSelectResult?: () => SupabaseResult<Record<string, unknown>>;
+  profileUpsertResult?: () => SupabaseResult<Record<string, unknown>>;
+  storageUploadResult?: () => Promise<{ error: { message: string } | null }>;
+};
+
+/** Cliente service com `profiles` + storage `avatars` (rotas /me/profile e /me/profile-media). */
+export const createLibraryProfileSupabaseMock = (config: LibraryProfileMockConfig = {}) => {
+  const defaultProfile = {
+    username: "Test User",
+    avatar_image: null as string | null,
+    banner_image: null as string | null,
+    user_id: "tester",
+  };
+  const profileSelectResult =
+    config.profileSelectResult ?? (() => Promise.resolve({ data: defaultProfile, error: null }));
+  const profileUpsertResult =
+    config.profileUpsertResult ??
+    (() =>
+      Promise.resolve({
+        data: { ...defaultProfile, avatar_image: "https://x/object/public/avatars/tester/avatar" },
+        error: null,
+      }));
+  const storageUploadResult = config.storageUploadResult ?? (() => Promise.resolve({ error: null }));
+
+  return {
+    from: vi.fn().mockImplementation((table: string) => {
+      if (table !== "profiles") {
+        throw new Error(`Unexpected table ${table}`);
+      }
+      return {
+        select: vi.fn().mockImplementation((_cols?: string) => ({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockImplementation(() => profileSelectResult()),
+          }),
+        })),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockImplementation(() => profileUpsertResult()),
           }),
         }),
       };
     }),
     storage: {
-      from: storageFrom,
+      from: vi.fn(() => ({
+        upload: vi.fn().mockImplementation(() => storageUploadResult()),
+        remove: vi.fn(() => Promise.resolve({ error: null })),
+        getPublicUrl: vi.fn(() => ({
+          data: { publicUrl: "https://test.supabase.co/storage/v1/object/public/avatars/tester/avatar" },
+        })),
+      })),
     },
   };
 };

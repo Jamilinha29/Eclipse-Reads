@@ -22,7 +22,6 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:8080",
-  "https://eclipse-reads.vercel.app"
 ];
 
 app.use(
@@ -71,6 +70,15 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
   process.exit(1);
 }
 
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** POST /me/profile-media — override em testes com `PROFILE_MEDIA_MAX_BYTES` (bytes). */
+const PROFILE_MEDIA_MAX_BYTES = parsePositiveIntEnv("PROFILE_MEDIA_MAX_BYTES", 25 * 1024 * 1024);
+
 app.get("/health", (_req: Request, res: Response) => res.json({ status: "ok" }));
 
 const requireAuthHeader = (req: Request) => {
@@ -110,7 +118,7 @@ const sanitizeFallbackUsername = (value: string) => {
 
 const profileMediaUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  limits: { fileSize: PROFILE_MEDIA_MAX_BYTES },
 });
 
 function storageObjectPathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
@@ -827,7 +835,8 @@ app.get("/me/stats", async (req: Request, res: Response) => {
 app.use((err: any, _req: Request, res: Response, next: any) => {
   if (err && err.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "O arquivo é muito grande. O limite máximo é 25MB." });
+      const mb = Math.max(1, Math.round(PROFILE_MEDIA_MAX_BYTES / (1024 * 1024)));
+      return res.status(413).json({ error: `O arquivo é muito grande. O limite máximo é ${mb}MB.` });
     }
     return res.status(400).json({ error: `Erro no upload: ${err.message}` });
   }

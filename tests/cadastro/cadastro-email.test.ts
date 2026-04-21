@@ -4,6 +4,7 @@ import { supabaseCreateClientMock } from "../mocks/supabaseRegistry";
 import { loadBooksApi } from "../helpers/loadApps";
 import { createBooksSupabaseMock } from "../helpers/supabaseFactories";
 
+/** Resiliência GET /books (erro DB). Nome histórico “cadastro-email”; cadastro de utilizador é via Supabase no frontend. */
 describe("cadastro/cadastro-email", () => {
   it("retorna 500 sem derrubar o servidor quando o banco falha em /books", async () => {
     const supabaseMock = createBooksSupabaseMock({

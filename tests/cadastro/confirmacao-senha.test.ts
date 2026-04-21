@@ -4,6 +4,7 @@ import { supabaseCreateClientMock } from "../mocks/supabaseRegistry";
 import { loadBooksApi } from "../helpers/loadApps";
 import { createBooksSupabaseMock } from "../helpers/supabaseFactories";
 
+/** Falha ao inserir livro em POST /books — espelha persistência “confirmação” no fluxo de catálogo, não confirmação de senha no auth. */
 describe("cadastro/confirmacao-senha", () => {
   it("responde 500 e mensagem amigável caso a inserção falhe em /books", async () => {
     const supabaseMock = createBooksSupabaseMock({

@@ -11,7 +11,7 @@ if (existsSync(envPath)) {
   config({ path: envPath });
 }
 
-import express, { Request, Response, type RequestHandler } from "express";
+import express, { NextFunction, Request, Response, type RequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { createClient } from "@supabase/supabase-js";
@@ -28,7 +28,6 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:8080",
-  "https://eclipse-reads.vercel.app"
 ];
 
 app.use(
@@ -75,10 +74,19 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
   process.exit(1);
 }
 
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Limite POST /submissions — override em testes com `BOOKS_SUBMISSION_MAX_BYTES` (bytes). */
+const BOOKS_SUBMISSION_MAX_BYTES = parsePositiveIntEnv("BOOKS_SUBMISSION_MAX_BYTES", 50 * 1024 * 1024);
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: BOOKS_SUBMISSION_MAX_BYTES },
 });
 
 function rewriteBookUrl(url: string | null | undefined, req: Request): string | null {
@@ -878,6 +886,19 @@ app.post("/books", async (req: Request, res: Response) => {
     const status = err?.statusCode ? Number(err.statusCode) : 500;
     return res.status(status).json({ error: "Ocorreu um erro inesperado ao salvar o livro." });
   }
+});
+
+// Multer (tamanho de ficheiro) — após as rotas que usam upload
+app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  const e = err as { name?: string; code?: string; message?: string };
+  if (e?.name === "MulterError") {
+    if (e.code === "LIMIT_FILE_SIZE") {
+      const mb = Math.max(1, Math.round(BOOKS_SUBMISSION_MAX_BYTES / (1024 * 1024)));
+      return res.status(413).json({ error: `File too large (max ${mb}MB).` });
+    }
+    return res.status(400).json({ error: `Upload error: ${e.message ?? "unknown"}` });
+  }
+  next(err);
 });
 
 const PORT = Number(process.env.PORT ?? 4000);

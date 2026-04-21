@@ -12,21 +12,46 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor / IDE
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Environment variables
+# Environment & segredos — nunca commitar valores reais
 .env
 .env.local
 .env.*.local
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
+.env.production
+.env.development
+!.env.example
+**/.env
+!**/.env.example
+
+# Backends: cópias locais com chaves (o repo pode manter *só* exemplos versionados)
+services/backend/envs/*.env
+!services/backend/envs/*.env.example
+
+# Build / TypeScript
+*.tsbuildinfo
+.next
+.nuxt
+.cache
+
+# Relatórios de cobertura de testes (Vitest / v8) — regeneram com npm run test:coverage
+coverage/
+**/coverage/
+*.lcov
+.nyc_output/
+
+# Playwright E2E — relatórios e browsers cache local
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
