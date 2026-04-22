@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
+  "buildCommand": "if [ -d \"frontend\" ]; then cd frontend && npm run build; else npm run build; fi",
   "rewrites": [
     {
       "source": "/api/auth/:path*",
