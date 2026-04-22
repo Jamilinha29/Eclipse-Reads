@@ -67,7 +67,7 @@ git scripts do frontend
 
 ### Deploy na Vercel (variáveis de ambiente)
 
-O `vercel.json` na raiz já aponta build e saída para `frontend/`. No painel da Vercel, configure **Environment Variables** (Production e, se quiser, Preview):
+A config da Vercel fica em `frontend/vercel.json`; no painel, defina **Root Directory** como `frontend`. Configure **Environment Variables** (Production e, se quiser, Preview):
 
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|

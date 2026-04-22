@@ -1,15 +1,5 @@
-// Endpoints dos serviços backend.
-// Os serviços em `services/backend/*` rodam em portas diferentes (ex: 4000 e 4200) e
-// não utilizam prefixo `/api`.
-const BOOKS_API_BASE_URL =
-  (import.meta.env.VITE_BOOKS_API_URL as string) ||
-  (import.meta.env.VITE_API_URL as string) ||
-  "/api/books";
-
-const LIBRARY_API_BASE_URL =
-  (import.meta.env.VITE_LIBRARY_API_URL as string) ||
-  (import.meta.env.VITE_API_URL as string) ||
-  "/api/library";
+// Endpoints dos serviços backend (bases em `apiBases.ts` — env na Vercel, /api/* só em dev).
+import { BOOKS_API_BASE_URL, LIBRARY_API_BASE_URL } from "@/lib/apiBases";
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {

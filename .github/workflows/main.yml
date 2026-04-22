@@ -147,18 +147,15 @@ jobs:
           docker push $IMAGE_LOWER
 
   # ================================
-  # DEPLOY TO VERCEL — raiz do repo (api/* + vercel.json + build do frontend)
-  # Não use working-directory: frontend: isso publica só o SPA e perde as rotas serverless.
+  # DEPLOY TO VERCEL — projeto com Root Directory = frontend/ (vercel.json em frontend/)
+  # Requer secret: VERCEL_TOKEN; no painel, Root Directory: frontend
   # ================================
-  # Deploy Vercel desligado no CI até reativar manualmente (veja `if` abaixo).
   deploy-frontend:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: [frontend, backend, root-tests]
-    # Para voltar a publicar na Vercel: use `secrets.VERCEL_TOKEN` e troque por:
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    if: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -169,5 +166,6 @@ jobs:
           node-version: 20
 
       - name: Deploy to Vercel
+        working-directory: frontend
         run: npx vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
 

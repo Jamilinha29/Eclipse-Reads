@@ -6,11 +6,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toastNeedLogin } from "@/lib/loginToast";
+import { BOOKS_API_BASE_URL as booksApiBase } from "@/lib/apiBases";
 // (não usamos o api.ts aqui porque ele ainda não expõe reviews)
-const booksApiBase =
-  (import.meta.env.VITE_BOOKS_API_URL as string) ||
-  (import.meta.env.VITE_API_URL as string) ||
-  "/api/books";
 
 interface Review {
   id: string;
