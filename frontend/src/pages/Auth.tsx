@@ -67,6 +67,16 @@ const isAuthEmailRateLimitError = (message: string | undefined) => {
   );
 };
 
+/** GoTrue: falha ao falar com SMTP/ provedor; correção = painel Supabase (Auth), não o código do app. */
+const isConfirmationEmailSendError = (message: string | undefined) => {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("error sending confirmation email") ||
+    m.includes("sending confirmation email") ||
+    m.includes("unable to send email")
+  );
+};
+
 const isEmailNotConfirmedError = (message: string | undefined) => {
   const normalizedMessage = (message || "").toLowerCase();
   return normalizedMessage.includes("email not confirmed") || normalizedMessage.includes("not confirmed");
@@ -268,6 +278,10 @@ const Auth = () => {
       } else if (isAuthEmailRateLimitError(error.message)) {
         toast.error(
           "Muitas tentativas de envio de e-mail. Aguarde um pouco ou eleve o limite em Supabase (Authentication → Rate limits)."
+        );
+      } else if (isConfirmationEmailSendError(error.message)) {
+        toast.error(
+          "Falha ao enviar o e-mail de confirmação (servidor Supabase). Em Auth → e-mail: confira SMTP/Resend, remetente e API key, ou desative o SMTP e teste o remetente padrão. Veja logs de Auth no painel."
         );
       } else {
         toast.error("Erro ao criar conta: " + error.message);
