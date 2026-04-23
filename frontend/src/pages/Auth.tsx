@@ -44,8 +44,28 @@ const isRedirectConfigError = (message: string | undefined) => {
   );
 };
 
-const isAlreadyRegisteredError = (message: string | undefined) =>
-  (message || "").toLowerCase().includes("already registered");
+/** GoTrue devolve textos variados: "User already registered", "already been registered", etc. */
+const isAlreadyRegisteredError = (message: string | undefined) => {
+  const m = (message || "").toLowerCase();
+  if (!m) return false;
+  return (
+    m.includes("already registered") ||
+    m.includes("already been registered") ||
+    m.includes("user already") ||
+    m.includes("email address is already") ||
+    m.includes("a user with this email")
+  );
+};
+
+const isAuthEmailRateLimitError = (message: string | undefined) => {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("rate") ||
+    m.includes("over_email") ||
+    m.includes("too many") ||
+    m.includes("email rate limit")
+  );
+};
 
 const isEmailNotConfirmedError = (message: string | undefined) => {
   const normalizedMessage = (message || "").toLowerCase();
@@ -136,7 +156,14 @@ const Auth = () => {
         const redirectUrl = `${window.location.origin}/auth`;
         const resendResponse = await resendConfirmationEmail(email, redirectUrl);
         if (resendResponse.error) {
-          toast.error("Seu e-mail ainda não foi confirmado. Não foi possível reenviar agora.");
+          const re = (resendResponse.error as { message?: string }).message;
+          if (isAuthEmailRateLimitError(re)) {
+            toast.error(
+              "E-mail ainda não confirmado. O limite de envios do Supabase foi atingido — aguarde cerca de 1 hora e tente de novo, ou ajuste os limites no painel (Auth → Rate limits)."
+            );
+          } else {
+            toast.error("Seu e-mail ainda não foi confirmado. Não foi possível reenviar agora.");
+          }
         } else {
           toast.error("Seu e-mail ainda não foi confirmado. Reenviamos o link de confirmação.");
         }
@@ -227,10 +254,21 @@ const Auth = () => {
       if (isAlreadyRegisteredError(error.message)) {
         const resendResponse = await resendConfirmationEmail(email, redirectUrl);
         if (resendResponse.error) {
-          toast.error("Este e-mail já está cadastrado. Tente fazer login ou recuperar senha.");
+          const re = (resendResponse.error as { message?: string }).message;
+          if (isAuthEmailRateLimitError(re)) {
+            toast.error(
+              "Este e-mail já está cadastrado. O limite de envios de e-mail foi atingido; aguarde e tente de novo ou ajuste em Supabase → Authentication → Rate limits."
+            );
+          } else {
+            toast.error("Este e-mail já está cadastrado. Tente fazer login ou recuperar a senha.");
+          }
         } else {
           toast.success("Este e-mail já existe. Reenviamos o e-mail de confirmação.");
         }
+      } else if (isAuthEmailRateLimitError(error.message)) {
+        toast.error(
+          "Muitas tentativas de envio de e-mail. Aguarde um pouco ou eleve o limite em Supabase (Authentication → Rate limits)."
+        );
       } else {
         toast.error("Erro ao criar conta: " + error.message);
       }
