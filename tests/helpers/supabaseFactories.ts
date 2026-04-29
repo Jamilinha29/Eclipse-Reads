@@ -28,6 +28,26 @@ export const createAuthClient = (resolver: () => SupabaseResult<{ user: Record<s
 export const createBaseClient = () => ({
   auth: {
     getUser: vi.fn(),
+    signInWithPassword: vi.fn().mockResolvedValue({
+      data: {
+        session: {
+          access_token: "mock-access-token",
+          refresh_token: "mock-refresh-token",
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          token_type: "bearer",
+        },
+        user: { id: "u-login", email: "login@example.com" },
+      },
+      error: null,
+    }),
+    signUp: vi.fn().mockResolvedValue({
+      data: {
+        session: null,
+        user: { id: "u-signup", email: "signup@example.com" },
+      },
+      error: null,
+    }),
   },
 });
 

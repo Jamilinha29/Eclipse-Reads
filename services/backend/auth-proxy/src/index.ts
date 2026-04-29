@@ -43,6 +43,82 @@ const baseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 app.get("/health", (_req: Request, res: Response) => res.json({ status: "ok" }));
 
+/** Login com e-mail/senha (equivale a `signInWithPassword` no frontend). */
+app.post("/login", async (req: Request, res: Response) => {
+  try {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!email || !password) {
+      return res.status(400).json({ error: "email e password são obrigatórios" });
+    }
+
+    const { data, error } = await baseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      return res.status(401).json({ error: error.message });
+    }
+
+    const session = data.session;
+    const user = data.user;
+    return res.status(200).json({
+      access_token: session?.access_token ?? null,
+      refresh_token: session?.refresh_token ?? null,
+      expires_in: session?.expires_in ?? null,
+      expires_at: session?.expires_at ?? null,
+      token_type: session?.token_type ?? "bearer",
+      user: user ?? null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: message });
+  }
+});
+
+const signupHandler = async (req: Request, res: Response) => {
+  try {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const full_name =
+      typeof req.body?.full_name === "string" ? req.body.full_name.trim() : undefined;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "email e password são obrigatórios" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "senha deve ter no mínimo 6 caracteres" });
+    }
+
+    const { data, error } = await baseClient.auth.signUp({
+      email,
+      password,
+      ...(full_name ? { options: { data: { full_name } } } : {}),
+    });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const session = data.session;
+    const user = data.user;
+    const needsEmailConfirmation = !session && !!user;
+    const status = session ? 201 : 202;
+
+    return res.status(status).json({
+      access_token: session?.access_token ?? null,
+      refresh_token: session?.refresh_token ?? null,
+      expires_in: session?.expires_in ?? null,
+      expires_at: session?.expires_at ?? null,
+      token_type: session?.token_type ?? "bearer",
+      user: user ?? null,
+      needs_email_confirmation: needsEmailConfirmation,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: message });
+  }
+};
+
+app.post("/signup", signupHandler);
+app.post("/cadastro", signupHandler);
+
 // Validate token by passing Authorization header to supabase client and calling auth.getUser()
 app.get("/validate", async (req: Request, res: Response) => {
   try {
