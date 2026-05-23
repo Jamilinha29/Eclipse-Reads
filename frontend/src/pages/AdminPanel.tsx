@@ -62,6 +62,7 @@ const AdminPanel = () => {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [storageFiles, setStorageFiles] = useState<StorageFile[]>([]);
   const [storageLoading, setStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [bookForms, setBookForms] = useState<Record<string, BookForm>>({});
   const [existingBooks, setExistingBooks] = useState<Set<string>>(new Set());
   const [existingBooksData, setExistingBooksData] = useState<Map<string, any>>(new Map());
@@ -103,17 +104,27 @@ const AdminPanel = () => {
   const loadStorageFiles = useCallback(async () => {
     if (!token) return;
     setStorageLoading(true);
+    setStorageError(null);
     try {
       const { files } = await api.adminListBooksStorage(token);
       setStorageFiles(files || []);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao carregar arquivos do storage";
+      setStorageError(msg);
+      setStorageFiles([]);
       toast.error(msg);
       console.error(e);
     } finally {
       setStorageLoading(false);
     }
   }, [token]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === "import") {
+      void loadStorageFiles();
+    }
+  };
 
   const loadSubmissions = useCallback(async () => {
     if (!token) return;
@@ -355,10 +366,10 @@ const AdminPanel = () => {
             </div>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
               <TabsTrigger value="submissions">Submissões</TabsTrigger>
-              <TabsTrigger value="import" onClick={loadStorageFiles}>Importar do Storage</TabsTrigger>
+              <TabsTrigger value="import">Importar do Storage</TabsTrigger>
             </TabsList>
 
             <TabsContent value="submissions">
@@ -473,6 +484,16 @@ const AdminPanel = () => {
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
                   <p className="text-muted-foreground">Carregando arquivos...</p>
                 </div>
+              ) : storageError ? (
+                <Card className="p-12 text-center border-dashed border-destructive/40">
+                  <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+                    <h3 className="text-xl font-bold text-destructive">Erro ao carregar arquivos</h3>
+                    <p className="text-muted-foreground">{storageError}</p>
+                    <Button variant="outline" onClick={() => void loadStorageFiles()}>
+                      Tentar novamente
+                    </Button>
+                  </div>
+                </Card>
               ) : storageFiles.length === 0 ? (
                 <Card className="p-12 text-center border-dashed">
                   <div className="flex flex-col items-center gap-4 max-w-md mx-auto">

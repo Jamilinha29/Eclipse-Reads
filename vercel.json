@@ -15,6 +15,22 @@
       "destination": "/api/auth"
     },
     {
+      "source": "/api/books/:slug*",
+      "destination": "/api/books"
+    },
+    {
+      "source": "/api/books",
+      "destination": "/api/books"
+    },
+    {
+      "source": "/api/library/:slug*",
+      "destination": "/api/library"
+    },
+    {
+      "source": "/api/library",
+      "destination": "/api/library"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

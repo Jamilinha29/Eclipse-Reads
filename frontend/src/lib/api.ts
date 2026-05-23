@@ -1,14 +1,30 @@
 // Endpoints dos serviços backend (bases em `apiBases.ts` — env na Vercel, /api/* só em dev).
 import { BOOKS_API_BASE_URL, LIBRARY_API_BASE_URL, PRODUCTION_API_CONFIG_MESSAGE } from "@/lib/apiBases";
+import { checkIsAdmin } from "@/lib/adminAuth";
+import { listLivrosBookFilesFromStorage } from "@/lib/storageBooks";
+import {
+  addToLibrary as supabaseAddToLibrary,
+  createGoal as supabaseCreateGoal,
+  deleteGoal as supabaseDeleteGoal,
+  fetchAchievements,
+  fetchGoals,
+  fetchLibrary,
+  fetchMeAchievements,
+  fetchMeProfile,
+  fetchMeSettings,
+  fetchMeStats,
+  fetchReadingProgress,
+  removeFromLibrary as supabaseRemoveFromLibrary,
+  saveReadingProgress as supabaseSaveReadingProgress,
+  toggleAchievement as supabaseToggleAchievement,
+  updateGoal as supabaseUpdateGoal,
+  upsertMeProfile,
+  upsertMeSettings,
+  uploadProfileMediaToStorage,
+} from "@/lib/supabaseLibrary";
 
 const assertBooksApi = () => {
   if (!BOOKS_API_BASE_URL) {
-    throw new Error(PRODUCTION_API_CONFIG_MESSAGE);
-  }
-};
-
-const assertLibraryApi = () => {
-  if (!LIBRARY_API_BASE_URL) {
     throw new Error(PRODUCTION_API_CONFIG_MESSAGE);
   }
 };
@@ -108,49 +124,28 @@ export const api = {
   },
 
   // Me endpoints - profile/settings/admin/goals
-  async getMeAdmin(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/admin`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async getMeAdmin(userId: string) {
+    const isAdmin = await checkIsAdmin(userId);
+    return { isAdmin };
   },
 
-  async getMeProfile(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async getMeProfile(_token: string) {
+    return fetchMeProfile();
   },
 
   async updateMeProfile(
     payload: { username?: string; avatar_image?: string; banner_image?: string },
-    token: string
+    _token: string
   ) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleResponse(response);
+    return upsertMeProfile(payload);
   },
 
-  async uploadProfileMedia(kind: "avatar" | "banner", file: File, token: string) {
-    const form = new FormData();
-    form.append("kind", kind);
-    form.append("file", file);
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/profile-media`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-    return handleResponse(response);
+  async uploadProfileMedia(kind: "avatar" | "banner", file: File, _token: string) {
+    return uploadProfileMediaToStorage(kind, file);
   },
 
-  async getMeSettings(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async getMeSettings(_token: string) {
+    return fetchMeSettings();
   },
 
   async updateMeSettings(
@@ -160,43 +155,26 @@ export const api = {
       notifications_enabled?: boolean;
       new_books_notifications?: boolean;
     },
-    token: string
+    _token: string
   ) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/settings`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleResponse(response);
+    return upsertMeSettings(payload);
   },
 
-  async getGoals(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async getGoals(_token: string) {
+    return fetchGoals();
   },
 
   // ACHIEVEMENTS
   async getAchievements() {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/achievements`);
-    const data = await handleResponse(response);
-    return data;
+    return fetchAchievements();
   },
 
-  async toggleAchievement(id: string, token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/achievements/${id}/toggle`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return handleResponse(response);
+  async toggleAchievement(id: string, _token: string) {
+    return supabaseToggleAchievement(id);
   },
 
-  async getMeAchievements(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/achievements`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return handleResponse(response);
+  async getMeAchievements(_token: string) {
+    return fetchMeAchievements();
   },
 
   async adminCreateAchievement(payload: { title: string; description?: string }, token: string) {
@@ -209,64 +187,39 @@ export const api = {
   },
 
   // STATS
-  async getMeStats(token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/stats`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return handleResponse(response);
+  async getMeStats(_token: string) {
+    return fetchMeStats();
   },
 
   async createGoal(
     payload: { title: string; target_books: number; deadline: string | null },
-    token: string
+    _token: string
   ) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleResponse(response);
+    return supabaseCreateGoal(payload);
   },
 
   async updateGoal(
     id: string,
     payload: { current_books?: number; completed?: boolean },
-    token: string
+    _token: string
   ) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals/${id}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleResponse(response);
+    return supabaseUpdateGoal(id, payload);
   },
 
-  async deleteGoal(id: string, token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/goals/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async deleteGoal(id: string, _token: string) {
+    return supabaseDeleteGoal(id);
   },
 
-  async getReadingProgress(bookId: string, token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/reading-progress/${bookId}`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async getReadingProgress(bookId: string, _token: string) {
+    return fetchReadingProgress(bookId);
   },
 
   async saveReadingProgress(
     bookId: string,
     payload: { current_page: number; total_pages: number; progress_percentage: number },
-    token: string
+    _token: string
   ) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/reading-progress/${bookId}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleResponse(response);
+    return supabaseSaveReadingProgress(bookId, payload);
   },
 
   // Admin (books-api) — Bearer + role admin
@@ -294,11 +247,9 @@ export const api = {
     return handleResponse(response);
   },
 
-  async adminListBooksStorage(token: string) {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/storage/books`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
+  async adminListBooksStorage(_token: string) {
+    const files = await listLivrosBookFilesFromStorage();
+    return { files };
   },
 
   async adminDownloadStorageFile(storagePath: string, downloadFileName: string, token: string) {
@@ -350,41 +301,17 @@ export const api = {
     return handleResponse(response);
   },
 
-  // Library endpoints - com autenticação
-  async getLibrary(type: 'favoritos' | 'lendo' | 'lidos', token: string) {
-    const response = await fetch(
-      `${LIBRARY_API_BASE_URL}/library?type=${type}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    return handleResponse(response);
+  // Library — Supabase direto (RLS); não depende do library-service local
+  async getLibrary(type: "favoritos" | "lendo" | "lidos", _token: string) {
+    return fetchLibrary(type);
   },
 
-  async addToLibrary(type: 'favoritos' | 'lendo' | 'lidos', bookId: string, token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/library/${type}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ book_id: bookId }),
-    });
-    return handleResponse(response);
+  async addToLibrary(type: "favoritos" | "lendo" | "lidos", bookId: string, _token: string) {
+    return supabaseAddToLibrary(type, bookId);
   },
 
-  async removeFromLibrary(type: 'favoritos' | 'lendo' | 'lidos', bookId: string, token: string) {
-    const response = await fetch(`${LIBRARY_API_BASE_URL}/library/${type}/${bookId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    return handleResponse(response);
+  async removeFromLibrary(type: "favoritos" | "lendo" | "lidos", bookId: string, _token: string) {
+    return supabaseRemoveFromLibrary(type, bookId);
   },
 
   async getBookReviews(bookId: string) {

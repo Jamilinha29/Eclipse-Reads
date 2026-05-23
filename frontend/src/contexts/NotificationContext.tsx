@@ -30,7 +30,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       const { settings } = await api.getMeSettings(token || "");
-      if (!settings?.new_books_notifications) {
+      const newBooksNotifications = settings?.new_books_notifications ?? true;
+      if (!newBooksNotifications) {
         setUnreadCount(0);
         setNewBooks([]);
         return;

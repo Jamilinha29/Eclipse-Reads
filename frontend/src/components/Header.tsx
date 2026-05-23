@@ -18,18 +18,18 @@ import { api } from "@/lib/api";
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { avatarImage, username, logout, userId, token } = useAuth();
+  const { avatarImage, username, logout, userId } = useAuth();
   const { unreadCount, newBooks, resetCount } = useNotifications();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId || !token) {
+      if (!userId) {
         setIsAdmin(false);
         return;
       }
       try {
-        const result = await api.getMeAdmin(token);
+        const result = await api.getMeAdmin(userId);
         setIsAdmin(!!result.isAdmin);
       } catch {
         setIsAdmin(false);
@@ -37,7 +37,7 @@ const Header = () => {
     };
 
     void checkAdmin();
-  }, [userId, token]);
+  }, [userId]);
 
   const isActive = (path: string) => location.pathname === path;
 

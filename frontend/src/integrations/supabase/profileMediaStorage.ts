@@ -1,6 +1,6 @@
 /**
  * Modo convidado: imagens em localStorage (data URL).
- * Conta autenticada: upload/remoção de avatar/banner via `POST /me/profile-media` (library-service), sem Supabase Storage no browser.
+ * Conta autenticada: upload de avatar/banner direto no bucket `avatars` (Supabase Storage).
  */
 export const GUEST_AUTH_FLAG_KEY = "eclipse_reads_auth_type";
 export const GUEST_AVATAR_KEY = "eclipse_reads_guest_avatar";

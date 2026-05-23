@@ -8,20 +8,20 @@ interface AdminRouteProps {
 }
 
 const AdminRoute = ({ children }: AdminRouteProps) => {
-  const { isLoggedIn, loading: authLoading, userId, token } = useAuth();
+  const { isLoggedIn, loading: authLoading, userId } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!userId || !token) {
+      if (!userId) {
         setIsAdmin(false);
         setChecking(false);
         return;
       }
 
       try {
-        const result = await api.getMeAdmin(token);
+        const result = await api.getMeAdmin(userId);
         setIsAdmin(!!result.isAdmin);
       } catch (e) {
         console.error("getMeAdmin:", e);
@@ -34,7 +34,7 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     if (!authLoading) {
       void checkAdmin();
     }
-  }, [userId, token, authLoading]);
+  }, [userId, authLoading]);
 
   if (authLoading || checking) {
     return (

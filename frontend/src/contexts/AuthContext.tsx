@@ -79,8 +79,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { profile } = await api.getMeProfile(accessToken);
     const resolvedName = profile?.username || fallbackName;
     setUsername(resolvedName);
-    setAvatarImage(profile?.avatar_image || "");
-    setBannerImage(profile?.banner_image || "");
+    const bust = (url: string | null | undefined) =>
+      url ? `${url.split("?")[0]}?t=${Date.now()}` : "";
+    setAvatarImage(bust(profile?.avatar_image));
+    setBannerImage(bust(profile?.banner_image));
 
     if ((!profile || !profile.username) && fallbackName !== "Usuário") {
       await api.updateMeProfile({ username: fallbackName }, accessToken);

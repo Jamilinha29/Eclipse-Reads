@@ -1,6 +1,7 @@
 // Este arquivo é gerado automaticamente. Não edite diretamente.
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { assertBrowserSafeSupabaseKey } from '@/lib/supabaseKeyGuard';
 
 export const AUTH_REMEMBER_ME_KEY = "eclipse_reads_remember_me";
 /** Preenchido só quando "Lembrar-me" está ativo (localStorage). */
@@ -16,6 +17,15 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     "Variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY são obrigatórias. " +
       "Crie um arquivo frontend/.env (não versione) e reinicie o dev server."
   );
+}
+
+assertBrowserSafeSupabaseKey(SUPABASE_PUBLISHABLE_KEY, "VITE_SUPABASE_PUBLISHABLE_KEY");
+
+try {
+  localStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
+  sessionStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
+} catch {
+  /* ignore */
 }
 
 // Importe o cliente supabase assim:

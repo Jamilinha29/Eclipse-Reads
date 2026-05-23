@@ -26,3 +26,14 @@ Edite cada `.env` com URL e chaves do [Supabase Dashboard](https://supabase.com/
 | `*.env` | **Não** (ignorado pelo `.gitignore`) |
 
 Se os `.env` já estiveram no repositório antes, o próximo commit remove-os do tracking; **rotacione as chaves** no Supabase se o repo foi público.
+
+## Segurança das chaves Supabase
+
+| Chave | Onde usar | Pode ir no Git / browser? |
+|-------|-----------|---------------------------|
+| **anon / publishable** | `frontend/.env` → `VITE_SUPABASE_PUBLISHABLE_KEY` | Sim no browser (header `apikey` é esperado) |
+| **service_role** | `books-api.env`, `library-service.env` | **Nunca** no frontend nem no Git |
+
+- No DevTools você verá `Accept-Profile: public` e `apikey` — comportamento normal do Supabase/PostgREST.
+- A proteção de dados é **RLS** (políticas no SQL), não esconder a chave anon.
+- Na Vercel: `SUPABASE_SERVICE_KEY` só nas funções serverless (`api/*`), **sem** prefixo `VITE_`.

@@ -148,21 +148,37 @@ async function assertBookFileInStorage(filePath: string): Promise<string | null>
 }
 
 async function listLivrosBookFiles(): Promise<{ name: string; id: string; metadata: Record<string, unknown> | null }[]> {
-  const { data, error } = await supabase.storage.from("books").list(BOOKS_FILES_DIR, {
-    limit: 2000,
-    sortBy: { column: "name", order: "asc" },
-  });
-  if (error) {
-    if (isStoragePathMissingError(error.message)) return [];
-    throw error;
+  async function listRecursive(prefix: string): Promise<{ name: string; id: string; metadata: Record<string, unknown> | null }[]> {
+    const { data, error } = await supabase.storage.from("books").list(prefix, {
+      limit: 2000,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) {
+      if (isStoragePathMissingError(error.message)) return [];
+      throw error;
+    }
+
+    const files: { name: string; id: string; metadata: Record<string, unknown> | null }[] = [];
+    for (const item of data ?? []) {
+      if (!item.name) continue;
+      const path = `${prefix}/${item.name}`;
+      const isFolder = item.id == null && item.metadata == null;
+      if (isFolder) {
+        files.push(...(await listRecursive(path)));
+        continue;
+      }
+      if (isBookFileName(item.name)) {
+        files.push({
+          name: path,
+          id: item.id ?? path,
+          metadata: (item.metadata as Record<string, unknown> | undefined) ?? null,
+        });
+      }
+    }
+    return files;
   }
-  return (data ?? [])
-    .filter((f) => f.name && isBookFileName(f.name))
-    .map((f) => ({
-      name: `${BOOKS_FILES_DIR}/${f.name}`,
-      id: f.id ?? f.name,
-      metadata: (f.metadata as Record<string, unknown> | undefined) ?? null,
-    }));
+
+  return listRecursive(BOOKS_FILES_DIR);
 }
 
 function sanitizeStoragePath(raw: string): string | null {
