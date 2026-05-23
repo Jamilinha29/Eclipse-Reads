@@ -159,8 +159,8 @@ async function listLivrosBookFiles(): Promise<{ name: string; id: string; metada
   return (data ?? [])
     .filter((f) => f.name && isBookFileName(f.name))
     .map((f) => ({
-      ...f,
       name: `${BOOKS_FILES_DIR}/${f.name}`,
+      id: f.id ?? f.name,
       metadata: (f.metadata as Record<string, unknown> | undefined) ?? null,
     }));
 }

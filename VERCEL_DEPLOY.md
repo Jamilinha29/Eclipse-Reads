@@ -29,7 +29,9 @@ Site estático **e** auth-proxy no **mesmo domínio**.
 | **Build / Output / Install** | Definidos em `vercel.json` na raiz |
 | **Node.js** | 20.x |
 
-O CI (`.github/workflows/main.yml`) executa `npx vercel --prod` **na raiz**, alinhado a este fluxo.
+O CI (`.github/workflows/main.yml`) executa `vercel deploy --prod --name eclipse-reads` **na raiz**, alinhado a este fluxo.
+
+**Secrets opcionais no GitHub** (evitam criar projeto duplicado): `VERCEL_ORG_ID` e `VERCEL_PROJECT_ID` — copie em Vercel → Project → Settings → General.
 
 ### Variáveis de ambiente (obrigatórias)
 
