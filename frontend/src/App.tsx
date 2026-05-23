@@ -7,6 +7,7 @@ import { LibraryProvider } from "./contexts/LibraryContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AuthenticatedRoute from "./components/AuthenticatedRoute";
 import AdminRoute from "./components/AdminRoute";
 import Header from "./components/Header";
 import AuthLinkHandler from "./components/AuthLinkHandler";
@@ -26,6 +27,8 @@ import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 import BookDetail from "./pages/BookDetail";
 import Read from "./pages/Read";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +47,8 @@ const App = () => (
             <Route path="/auth-callback" element={<AuthCallback />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/termos" element={<Terms />} />
+            <Route path="/privacidade" element={<Privacy />} />
                 <Route
                   path="/*"
                   element={
@@ -68,7 +73,14 @@ const App = () => (
                             } 
                           />
                           <Route path="/book/:id" element={<BookDetail />} />
-                          <Route path="/read/:id" element={<Read />} />
+                          <Route
+                            path="/read/:id"
+                            element={
+                              <AuthenticatedRoute>
+                                <Read />
+                              </AuthenticatedRoute>
+                            }
+                          />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </>

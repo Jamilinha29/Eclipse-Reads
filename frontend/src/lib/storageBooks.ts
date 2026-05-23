@@ -53,6 +53,11 @@ async function listLivrosRecursive(prefix: string): Promise<StorageBookFile[]> {
   return files;
 }
 
+/** Nome do ficheiro sem pastas (ex.: `livros/foo.epub` → `foo.epub`). */
+export function storageFileBasename(storagePath: string): string {
+  return storagePath.split("/").pop() ?? storagePath;
+}
+
 /** Lista PDF/EPUB/MOBI em `books/livros/` (inclui subpastas, ex. submissões por usuário). */
 export async function listLivrosBookFilesFromStorage(): Promise<StorageBookFile[]> {
   return listLivrosRecursive(BOOKS_FILES_DIR);

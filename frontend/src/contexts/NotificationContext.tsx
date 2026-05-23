@@ -42,7 +42,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const books = response.books as Book[];
 
         const lastCheck = localStorage.getItem(`last_book_check_${userId}`);
-        const lastCheckDate = lastCheck ? new Date(lastCheck) : new Date(0);
+        if (!lastCheck) {
+          localStorage.setItem(`last_book_check_${userId}`, new Date().toISOString());
+          setNewBooks([]);
+          setUnreadCount(0);
+          return;
+        }
+        const lastCheckDate = new Date(lastCheck);
 
         const newerBooks = books.filter(book => {
           const createdAt = new Date(book.created_at);

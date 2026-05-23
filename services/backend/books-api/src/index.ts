@@ -22,15 +22,32 @@ import { createHmac, timingSafeEqual } from "crypto";
 const app = express();
 app.disable("x-powered-by");
 
-// Middleware configuration
-app.use(express.json({ limit: '10mb' })); // Limite para uploads de arquivos
-app.use(morgan("dev"));
-const allowedOrigins = [
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+
+function parseAllowedOrigins(fallback: string[]): string[] {
+  const raw = process.env.ALLOWED_ORIGINS?.trim();
+  if (!raw) return fallback;
+  return raw.split(",").map((o) => o.trim()).filter(Boolean);
+}
+
+function safeDbError(error: { message?: string } | null | undefined, fallback: string): string {
+  if (NODE_ENV === "test" && error?.message) return error.message;
+  return fallback;
+}
+
+const defaultOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:8080",
   "https://eclipse-reads.vercel.app",
 ];
+const allowedOrigins = parseAllowedOrigins(defaultOrigins);
+
+// Middleware configuration
+app.use(express.json({ limit: "10mb" }));
+if (NODE_ENV !== "production") {
+  app.use(morgan("dev"));
+}
 
 app.use(
   cors({
@@ -43,7 +60,7 @@ app.use(
       }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-File-Access"],
     credentials: true,
   })
 );
@@ -71,7 +88,6 @@ app.use((req, res, next) => {
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? "";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? "";
-const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
   console.error("❌ SUPABASE_URL, SUPABASE_SERVICE_KEY, or SUPABASE_ANON_KEY not set. Exiting...");
@@ -89,7 +105,23 @@ const BOOKS_SUBMISSION_MAX_BYTES = parsePositiveIntEnv("BOOKS_SUBMISSION_MAX_BYT
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-const FILE_ACCESS_SECRET = process.env.FILE_ACCESS_SECRET ?? SUPABASE_SERVICE_KEY.slice(0, 32);
+const AGE_RATINGS = new Set(["Livre", "10+", "12+", "14+", "16+", "18+"]);
+
+async function recomputeBookRating(bookId: string) {
+  const { data: rows, error } = await supabase.from("reviews").select("rating").eq("book_id", bookId);
+  if (error) return;
+  const ratings = (rows ?? []).map((r: { rating: number }) => Number(r.rating)).filter((n) => Number.isFinite(n));
+  const avg = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+  await supabase.from("books").update({ rating: Math.round(avg * 100) / 100 }).eq("id", bookId);
+}
+
+const FILE_ACCESS_SECRET =
+  process.env.FILE_ACCESS_SECRET ??
+  (NODE_ENV === "production" ? "" : SUPABASE_SERVICE_KEY.slice(0, 32));
+if (!FILE_ACCESS_SECRET) {
+  console.error("❌ FILE_ACCESS_SECRET é obrigatório em produção.");
+  process.exit(1);
+}
 const FILE_ACCESS_TTL_SEC = 3600;
 /** PDF/EPUB/MOBI ficam em `livros/`; capas continuam em `covers/`. */
 const BOOKS_FILES_DIR = "livros";
@@ -189,6 +221,19 @@ function sanitizeStoragePath(raw: string): string | null {
   return segments.join("/");
 }
 
+function isCoverStoragePath(path: string): boolean {
+  return path.startsWith("covers/");
+}
+
+/** Catálogo público: não expõe caminho interno do Storage (evita download direto). */
+function toPublicBook(book: Record<string, unknown>, req: Request) {
+  const { file_path: _fp, ...rest } = book;
+  return {
+    ...rest,
+    cover_image: rewriteBookUrl(typeof book.cover_image === "string" ? book.cover_image : null, req),
+  };
+}
+
 /** Normaliza caminho de arquivo de livro para `livros/...` (ignora capas). */
 function normalizeBookFilePath(raw: string): string | null {
   const path = sanitizeStoragePath(raw);
@@ -217,6 +262,13 @@ function verifyFileAccessToken(bookId: string, token: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** D-02: prefer header over query string (Referer/history leak). */
+function extractFileAccessToken(req: Request): string {
+  const header = req.headers["x-file-access"];
+  if (typeof header === "string" && header.trim()) return header.trim();
+  return String(req.query.access ?? "");
 }
 
 const upload = multer({
@@ -332,13 +384,11 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.get("/metrics", async (req: Request, res: Response) => {
-  if (NODE_ENV === "production") {
-    try {
-      await requireAdmin(req);
-    } catch (err: any) {
-      const status = err?.statusCode ? Number(err.statusCode) : 401;
-      return res.status(status).json({ error: "Unauthorized" });
-    }
+  try {
+    await requireAdmin(req);
+  } catch (err: any) {
+    const status = err?.statusCode ? Number(err.statusCode) : 401;
+    return res.status(status).json({ error: "Unauthorized" });
   }
   return res.json({ requests });
 });
@@ -362,10 +412,7 @@ app.get("/books", async (req: Request, res: Response) => {
       return filePath.length > 0;
     });
 
-    const rewrittenBooks = importedBooks.map((book: any) => ({
-      ...book,
-      cover_image: rewriteBookUrl(book.cover_image, req),
-    }));
+    const rewrittenBooks = importedBooks.map((book: any) => toPublicBook(book, req));
 
     return res.json({ books: rewrittenBooks });
   } catch (err: any) {
@@ -396,11 +443,7 @@ app.get("/books/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Livro não encontrado." });
     }
     
-    if (data) {
-      data.cover_image = rewriteBookUrl(data.cover_image, req);
-    }
-    
-    return res.json({ book: data });
+    return res.json({ book: toPublicBook(data as Record<string, unknown>, req) });
   } catch (err: any) {
     console.error("❌ Unexpected error /books/:id:", err);
     const msg = process.env.NODE_ENV === "test" ? (err.message || String(err)) : "Erro ao processar requisição do livro.";
@@ -408,10 +451,11 @@ app.get("/books/:id", async (req: Request, res: Response) => {
   }
 });
 
-// GET /books/:id/file-access -> token assinado para iframe/PDF (sem Header Authorization)
+// GET /books/:id/file-access -> token assinado para leitura in-app (requer login)
 app.get("/books/:id/file-access", async (req: Request, res: Response) => {
   requests++;
   try {
+    await requireUser(req);
     const id = req.params.id;
     const { data: book, error: bookError } = await supabase
       .from("books")
@@ -424,20 +468,27 @@ app.get("/books/:id/file-access", async (req: Request, res: Response) => {
     const access = signFileAccessToken(id);
     const protocol = req.headers["x-forwarded-proto"] || req.protocol;
     const host = req.get("host");
-    const url = `${protocol}://${host}/books/${id}/file?access=${encodeURIComponent(access)}`;
+    const url = `${protocol}://${host}/books/${id}/file`;
     return res.json({ url, access, expiresIn: FILE_ACCESS_TTL_SEC });
   } catch (err: any) {
     console.error("❌ Unexpected error /books/:id/file-access:", err);
-    return res.status(500).json({ error: "Erro ao gerar acesso ao arquivo." });
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    const msg =
+      status === 401
+        ? "Faça login para ler este livro."
+        : status === 403
+          ? "Sem permissão para acessar este livro."
+          : "Erro ao gerar acesso ao arquivo.";
+    return res.status(status).json({ error: msg });
   }
 });
 
-// GET /books/:id/file -> proxy do arquivo (exige token ?access= assinado)
+// GET /books/:id/file -> proxy do arquivo (exige token X-File-Access ou ?access= legado)
 app.get("/books/:id/file", async (req: Request, res: Response) => {
   requests++;
   try {
     const id = req.params.id;
-    const accessToken = String(req.query.access ?? "");
+    const accessToken = extractFileAccessToken(req);
     if (!accessToken || !verifyFileAccessToken(id, accessToken)) {
       return res.status(401).json({ error: "Acesso ao arquivo negado ou token expirado." });
     }
@@ -623,6 +674,34 @@ app.delete("/submissions/:id", async (req: Request, res: Response) => {
 });
 
 // --- Admin (exige Bearer + role admin) ---
+app.get("/admin/books", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    await requireAdmin(req);
+    const { data, error } = await supabase
+      .from("books")
+      .select("id, title, author, description, category, cover_image, rating, age_rating, created_at, file_path, file_type")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("❌ Database error /admin/books:", error);
+      return res.status(500).json({ error: "Erro ao buscar livros." });
+    }
+    const imported = (data ?? []).filter((book: any) => {
+      const fp = typeof book?.file_path === "string" ? book.file_path.trim() : "";
+      return fp.length > 0;
+    });
+    const books = imported.map((book: any) => ({
+      ...book,
+      cover_image: rewriteBookUrl(book.cover_image, req),
+    }));
+    return res.json({ books });
+  } catch (err: any) {
+    console.error("❌ Unexpected error /admin/books:", err);
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: "Erro ao listar livros para admin." });
+  }
+});
+
 app.get("/admin/submissions", async (req: Request, res: Response) => {
   requests++;
   try {
@@ -653,9 +732,14 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
       .select("*")
       .eq("id", id)
       .maybeSingle();
-    if (loadErr) return res.status(500).json({ error: loadErr.message });
+    if (loadErr) return res.status(500).json({ error: safeDbError(loadErr, "Erro ao carregar submissão.") });
     if (!submission) return res.status(404).json({ error: "Not found" });
     if (submission.status !== "pending") return res.status(400).json({ error: "Submission is not pending" });
+
+    const storageErr = await assertBookFileInStorage(submission.file_path);
+    if (storageErr) {
+      return res.status(400).json({ error: storageErr });
+    }
 
     const { data: existingBook } = await supabase
       .from("books")
@@ -666,35 +750,21 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
       return res.status(409).json({ error: "Submission already approved into catalog." });
     }
 
-    const { error: bookErr } = await supabase.from("books").insert({
-      title: submission.title,
-      author: submission.author,
-      description: submission.description,
-      category: submission.category,
-      file_path: submission.file_path,
-      file_type: submission.file_type,
-      submission_id: submission.id,
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc("approve_book_submission", {
+      p_submission_id: id,
+      p_reviewer_id: admin.id,
     });
-    if (bookErr) {
-      console.error("❌ Database error /admin/submissions approve insert book:", bookErr);
-      return res.status(500).json({ error: "Erro ao inserir livro aprovado no catálogo." });
+    if (rpcErr) {
+      const msg = rpcErr.message ?? "";
+      console.error("❌ RPC approve_book_submission:", rpcErr);
+      if (msg.includes("submission_not_found")) return res.status(404).json({ error: "Not found" });
+      if (msg.includes("submission_not_pending")) return res.status(400).json({ error: "Submission is not pending" });
+      if (msg.includes("already_approved")) {
+        return res.status(409).json({ error: "Submission already approved into catalog." });
+      }
+      return res.status(500).json({ error: safeDbError(rpcErr, "Erro ao aprovar submissão.") });
     }
-
-    const { error: upErr } = await supabase
-      .from("book_submissions")
-      .update({
-        status: "approved",
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: admin.id,
-      })
-      .eq("id", id)
-      .eq("status", "pending");
-    if (upErr) {
-      console.error("❌ Database error /admin/submissions approve status:", upErr);
-      await supabase.from("books").delete().eq("submission_id", submission.id);
-      return res.status(500).json({ error: "Falha ao atualizar status da submissão." });
-    }
-    return res.json({ ok: true });
+    return res.json({ ok: true, book_id: (rpcResult as { book_id?: string })?.book_id });
   } catch (err: any) {
     console.error("❌ Unexpected error /admin/submissions approve:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
@@ -712,10 +782,10 @@ app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) =>
 
     const { data: submission, error: loadErr } = await supabase
       .from("book_submissions")
-      .select("id, status")
+      .select("id, status, file_path")
       .eq("id", id)
       .maybeSingle();
-    if (loadErr) return res.status(500).json({ error: loadErr.message });
+    if (loadErr) return res.status(500).json({ error: safeDbError(loadErr, "Erro ao carregar submissão.") });
     if (!submission) return res.status(404).json({ error: "Not found" });
     if (submission.status !== "pending") return res.status(400).json({ error: "Submission is not pending" });
 
@@ -731,7 +801,10 @@ app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) =>
       .eq("status", "pending");
     if (error) {
       console.error("❌ Database error /admin/submissions reject:", error);
-      return res.status(500).json({ error: "Erro ao rejeitar submissão." });
+      return res.status(500).json({ error: safeDbError(error, "Erro ao rejeitar submissão.") });
+    }
+    if (submission.file_path) {
+      await supabase.storage.from("books").remove([submission.file_path]).catch(() => null);
     }
     return res.json({ ok: true });
   } catch (err: any) {
@@ -819,7 +892,12 @@ app.put("/admin/books/:id", async (req: Request, res: Response) => {
     if (typeof description === "string") payload.description = description;
     if (typeof category === "string") payload.category = category;
     if (cover_image === null || typeof cover_image === "string") payload.cover_image = cover_image;
-    if (typeof age_rating === "string") payload.age_rating = age_rating;
+    if (typeof age_rating === "string") {
+      if (!AGE_RATINGS.has(age_rating)) {
+        return res.status(400).json({ error: "age_rating inválido." });
+      }
+      payload.age_rating = age_rating;
+    }
 
     const { data, error } = await supabase.from("books").update(payload).eq("id", id).select("*").maybeSingle();
     if (error) {
@@ -971,7 +1049,7 @@ app.get("/quotes/today", async (req: Request, res: Response) => {
   }
 });
 
-// Proxy GET /images/books/* (capas)
+// Proxy GET /images/books/* — apenas capas (covers/); livros só via /books/:id/file com token
 app.get("/images/books/*", async (req: Request, res: Response) => {
   requests++;
   try {
@@ -985,6 +1063,9 @@ app.get("/images/books/*", async (req: Request, res: Response) => {
     }
     const filePath = sanitizeStoragePath(rawPath);
     if (!filePath) return res.status(400).json({ error: "caminho da imagem inválido" });
+    if (!isCoverStoragePath(filePath)) {
+      return res.status(403).json({ error: "Download de livros não permitido por esta rota." });
+    }
 
     const { data: fileData, error: fileError } = await supabase.storage.from("books").download(filePath);
     if (fileError) {
@@ -1067,20 +1148,34 @@ app.put("/books/:id/reviews", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "rating must be between 1 and 5" });
     }
 
+    const trimmedComment =
+      typeof comment === "string" ? comment.trim().slice(0, 2000) : null;
+
+    const { data: bookRow, error: bookErr } = await supabase
+      .from("books")
+      .select("id")
+      .eq("id", bookId)
+      .maybeSingle();
+    if (bookErr) {
+      return res.status(500).json({ error: safeDbError(bookErr, "Erro ao validar livro.") });
+    }
+    if (!bookRow) return res.status(404).json({ error: "Livro não encontrado." });
+
     const { error } = await supabase.from("reviews").upsert(
       {
         user_id: user.id,
         book_id: bookId,
         rating,
-        comment,
+        comment: trimmedComment,
       },
       { onConflict: "user_id,book_id" }
     );
 
     if (error) {
       console.error("❌ Database error:", error);
-      return res.status(500).json({ error: "Erro interno de banco de dados." });
+      return res.status(500).json({ error: safeDbError(error, "Erro interno de banco de dados.") });
     }
+    await recomputeBookRating(bookId);
     return res.json({ ok: true });
   } catch (err: any) {
     console.error("❌ Unexpected server error:", err);
@@ -1105,6 +1200,11 @@ app.post("/books", async (req: Request, res: Response) => {
       return res.status(400).json({
         error: "title, author, category and file_path are required",
       });
+    }
+
+    const storageErr = await assertBookFileInStorage(file_path);
+    if (storageErr) {
+      return res.status(400).json({ error: storageErr });
     }
 
     const { data, error } = await supabase
@@ -1149,22 +1249,32 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
 
 const PORT = Number(process.env.PORT ?? 4000);
 
-// Graceful shutdown handler
-process.on('SIGTERM', () => {
-  console.log('📴 SIGTERM received. Shutting down gracefully...');
-  process.exit(0);
-});
+let server: ReturnType<typeof app.listen> | undefined;
+
+function shutdown(signal: string) {
+  console.log(`📴 ${signal} received. Shutting down gracefully...`);
+  if (server) {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 if (NODE_ENV !== "test" && !process.env.VERCEL) {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`📚 books-api running on port ${PORT}`);
     console.log(`🌍 Environment: ${NODE_ENV}`);
   });
 }
 
-process.on('SIGINT', () => {
-  console.log('📴 SIGINT received. Shutting down gracefully...');
-  process.exit(0);
+app.use((_err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (!res.headersSent) {
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
 });
 
 export default app;

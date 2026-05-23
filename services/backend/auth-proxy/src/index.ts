@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
@@ -15,14 +15,21 @@ if (existsSync(envPath)) {
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
-const app = express();
+function parseAllowedOrigins(fallback: string[]): string[] {
+  const raw = process.env.ALLOWED_ORIGINS?.trim();
+  if (!raw) return fallback;
+  return raw.split(",").map((o) => o.trim()).filter(Boolean);
+}
 
-const allowedOrigins = [
+const defaultOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:8080",
   "https://eclipse-reads.vercel.app",
 ];
+const allowedOrigins = parseAllowedOrigins(defaultOrigins);
+
+const app = express();
 
 app.use(
   cors({
@@ -30,7 +37,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Bloqueado pela política de CORS"));
+        callback(null, false);
       }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -39,16 +46,22 @@ app.use(
   })
 );
 app.use(express.json());
+app.use((_req: Request, res: Response, next) => {
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 
-// Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
   if (NODE_ENV !== "production") {
     console.log(`[Vercel Proxy] Auth Proxy Hit: ${req.url}`);
   }
-  if (req.url.startsWith('/api/auth')) {
-    req.url = req.url.slice('/api/auth'.length);
+  if (req.url.startsWith("/api/auth")) {
+    req.url = req.url.slice("/api/auth".length);
   }
-  if (!req.url.startsWith('/')) req.url = '/' + req.url;
+  if (!req.url.startsWith("/")) req.url = "/" + req.url;
   next();
 });
 
@@ -57,18 +70,48 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("❌ SUPABASE_URL or SUPABASE_ANON_KEY not set!");
-  console.log("SUPABASE_URL:", SUPABASE_URL ? "✓ Set" : "❌ Not set");
-  console.log("SUPABASE_ANON_KEY:", SUPABASE_ANON_KEY ? "✓ Set" : "❌ Not set");
   process.exit(1);
 }
 
-// This client is used for checking user from token: we will create client with anon key but pass header Authorization
 const baseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const RATE_WINDOW_MS = 15 * 60 * 1000;
+const RATE_MAX = 30;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function clientKey(req: Request, scope: string): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = typeof forwarded === "string" ? forwarded.split(",")[0].trim() : req.ip ?? "unknown";
+  return `${scope}:${ip}`;
+}
+
+function rateLimit(scope: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = clientKey(req, scope);
+    const now = Date.now();
+    const bucket = rateBuckets.get(key);
+    if (!bucket || now > bucket.resetAt) {
+      rateBuckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > RATE_MAX) {
+      return res.status(429).json({ error: "Muitas tentativas. Tente novamente em alguns minutos." });
+    }
+    return next();
+  };
+}
+
+function authErrorMessage(status: number, detail?: string): string {
+  if (NODE_ENV === "test" && detail) return detail;
+  if (status === 401) return "E-mail ou senha inválidos.";
+  if (status === 400) return detail && detail.length < 120 ? detail : "Dados inválidos.";
+  return "Erro ao processar autenticação.";
+}
 
 app.get("/health", (_req: Request, res: Response) => res.json({ status: "ok" }));
 
-/** Login com e-mail/senha (equivale a `signInWithPassword` no frontend). */
-app.post("/login", async (req: Request, res: Response) => {
+app.post("/login", rateLimit("login"), async (req: Request, res: Response) => {
   try {
     const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
     const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -78,7 +121,7 @@ app.post("/login", async (req: Request, res: Response) => {
 
     const { data, error } = await baseClient.auth.signInWithPassword({ email, password });
     if (error) {
-      return res.status(401).json({ error: error.message });
+      return res.status(401).json({ error: authErrorMessage(401, error.message) });
     }
 
     const session = data.session;
@@ -89,11 +132,10 @@ app.post("/login", async (req: Request, res: Response) => {
       expires_in: session?.expires_in ?? null,
       expires_at: session?.expires_at ?? null,
       token_type: session?.token_type ?? "bearer",
-      user: user ?? null,
+      user: user ? { id: user.id, email: user.email } : null,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: message });
+  } catch {
+    return res.status(500).json({ error: "Erro interno ao autenticar." });
   }
 });
 
@@ -117,7 +159,7 @@ const signupHandler = async (req: Request, res: Response) => {
       ...(full_name ? { options: { data: { full_name } } } : {}),
     });
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json({ error: authErrorMessage(400, error.message) });
     }
 
     const session = data.session;
@@ -131,42 +173,95 @@ const signupHandler = async (req: Request, res: Response) => {
       expires_in: session?.expires_in ?? null,
       expires_at: session?.expires_at ?? null,
       token_type: session?.token_type ?? "bearer",
-      user: user ?? null,
+      user: user ? { id: user.id, email: user.email } : null,
       needs_email_confirmation: needsEmailConfirmation,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: message });
+  } catch {
+    return res.status(500).json({ error: "Erro interno ao cadastrar." });
   }
 };
 
-app.post("/signup", signupHandler);
-app.post("/cadastro", signupHandler);
+app.post("/signup", rateLimit("signup"), signupHandler);
+app.post("/cadastro", rateLimit("signup"), signupHandler);
 
-// Validate token by passing Authorization header to supabase client and calling auth.getUser()
+app.post("/refresh", rateLimit("refresh"), async (req: Request, res: Response) => {
+  try {
+    const refresh_token = typeof req.body?.refresh_token === "string" ? req.body.refresh_token : "";
+    if (!refresh_token) return res.status(400).json({ error: "refresh_token é obrigatório" });
+
+    const { data, error } = await baseClient.auth.refreshSession({ refresh_token });
+    if (error) return res.status(401).json({ error: authErrorMessage(401, error.message) });
+
+    const session = data.session;
+    return res.json({
+      access_token: session?.access_token ?? null,
+      refresh_token: session?.refresh_token ?? null,
+      expires_in: session?.expires_in ?? null,
+      expires_at: session?.expires_at ?? null,
+      token_type: session?.token_type ?? "bearer",
+    });
+  } catch {
+    return res.status(500).json({ error: "Erro ao renovar sessão." });
+  }
+});
+
+app.post("/logout", async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.header("authorization") ?? "";
+    if (!authHeader) return res.status(401).json({ error: "Authorization header required" });
+
+    const clientWithHeader = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { error } = await clientWithHeader.auth.signOut();
+    if (error) return res.status(400).json({ error: authErrorMessage(400, error.message) });
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: "Erro ao encerrar sessão." });
+  }
+});
+
 app.get("/validate", async (req: Request, res: Response) => {
   try {
     const authHeader = req.header("authorization") ?? "";
     if (!authHeader) return res.status(401).json({ valid: false, reason: "no auth header" });
 
-    // Create transient client with header
     const clientWithHeader = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
     const { data, error } = await clientWithHeader.auth.getUser();
-    if (error) return res.status(401).json({ valid: false, error: error.message });
+    if (error) {
+      return res.status(401).json({
+        valid: false,
+        error: NODE_ENV === "test" ? error.message : "Token inválido.",
+      });
+    }
 
-    return res.json({ valid: !!data.user, user: data.user ?? null });
-  } catch (err: any) {
-    return res.status(500).json({ valid: false, error: err.message ?? String(err) });
+    const user = data.user;
+    return res.json({
+      valid: !!user,
+      user: user ? { id: user.id, email: user.email } : null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({
+      valid: false,
+      error: NODE_ENV === "test" ? message : "Erro interno.",
+    });
   }
 });
 
 const PORT = Number(process.env.PORT ?? 4100);
 
+let server: ReturnType<typeof app.listen> | undefined;
+
 if (NODE_ENV !== "test" && !process.env.VERCEL) {
-  app.listen(PORT, () => console.log(`auth-proxy listening on ${PORT}`));
+  server = app.listen(PORT, () => console.log(`auth-proxy listening on ${PORT}`));
 }
+
+process.on("SIGTERM", () => {
+  server?.close(() => process.exit(0));
+});
 
 export default app;

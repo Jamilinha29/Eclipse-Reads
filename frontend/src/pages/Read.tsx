@@ -58,15 +58,22 @@ const Read = () => {
           return;
         }
         setBook(data);
+        if (!token) {
+          toastNeedLogin("Faça login para ler este livro.", navigate);
+          navigate("/auth");
+          return;
+        }
         const addedToReading = await addToReading(id, bookLimit);
         if (!addedToReading) {
           toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
         }
         try {
-          const { access } = await api.getBookFileAccess(id);
-          setFileUrl(api.getBookFileUrl(id, access));
+          const { access } = await api.getBookFileAccess(id, token);
+          const blobUrl = await api.fetchBookFileBlob(id, access);
+          setFileUrl(blobUrl);
         } catch {
-          setFileUrl(api.getBookFileUrl(id));
+          toast.error("Não foi possível abrir o livro. Verifique sua sessão.");
+          navigate("/auth");
         }
       } catch (error) {
         console.error("Error loading book:", error);
@@ -78,7 +85,13 @@ const Read = () => {
     };
 
     loadBook();
-  }, [id, navigate, addToReading, bookLimit]);
+  }, [id, navigate, addToReading, bookLimit, token]);
+
+  useEffect(() => {
+    return () => {
+      if (fileUrl.startsWith("blob:")) URL.revokeObjectURL(fileUrl);
+    };
+  }, [fileUrl]);
 
   useEffect(() => {
     setProgressLoaded(false);
@@ -109,15 +122,19 @@ const Read = () => {
 
       const progressPercentage = ((currentPage / totalPages) * 100).toFixed(2);
 
-      await api.saveReadingProgress(
-        id,
-        {
-          current_page: currentPage,
-          total_pages: totalPages,
-          progress_percentage: parseFloat(progressPercentage),
-        },
-        token
-      );
+      try {
+        await api.saveReadingProgress(
+          id,
+          {
+            current_page: currentPage,
+            total_pages: totalPages,
+            progress_percentage: parseFloat(progressPercentage),
+          },
+          token
+        );
+      } catch {
+        toast.error("Não foi possível salvar o progresso de leitura.");
+      }
     };
 
     const debounceTimer = setTimeout(saveProgress, 1000);

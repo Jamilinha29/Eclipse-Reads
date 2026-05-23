@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ import {
   AUTH_REMEMBER_ME_KEY,
   AUTH_SAVED_EMAIL_KEY,
 } from "@/integrations/supabase/client";
-import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
+import { startGuestSession } from "@/integrations/supabase/profileMediaStorage";
 import { UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -147,7 +147,7 @@ const Auth = () => {
     } catch {
       /* ignore */
     }
-    localStorage.setItem(GUEST_AUTH_FLAG_KEY, "guest");
+    startGuestSession();
     setAuthType("guest");
     setUserId(null);
     navigate("/", { replace: true });
@@ -506,8 +506,13 @@ const Auth = () => {
                   />
                   <label htmlFor="terms" className="text-sm cursor-pointer select-none leading-relaxed">
                     Eu aceito os{" "}
-                    <span className="text-primary underline">termos de uso</span> e{" "}
-                    <span className="text-primary underline">política de privacidade</span>
+                    <Link to="/termos" className="text-primary underline hover:opacity-80">
+                      termos de uso
+                    </Link>{" "}
+                    e{" "}
+                    <Link to="/privacidade" className="text-primary underline hover:opacity-80">
+                      política de privacidade
+                    </Link>
                   </label>
                 </div>
                 <Button className="w-full h-11 font-semibold" size="lg" type="submit" disabled={loading}>

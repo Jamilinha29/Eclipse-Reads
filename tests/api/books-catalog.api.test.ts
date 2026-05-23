@@ -49,6 +49,25 @@ describe("books-api catálogo (API)", () => {
     expect(res.body.books).toHaveLength(1);
     expect(res.body.books[0].id).toBe("b1");
     expect(res.body.books[0]).toHaveProperty("cover_image");
+    expect(res.body.books[0]).not.toHaveProperty("file_path");
+  });
+
+  it("GET /books/:id/file-access 401 sem Authorization", async () => {
+    const mock = createBooksSupabaseMock();
+    supabaseCreateClientMock.mockReturnValueOnce(mock);
+
+    const app = await loadBooksApi();
+    const res = await request(app).get("/books/b1/file-access");
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /images/books/livros/x.pdf 403 — não expõe arquivo de leitura", async () => {
+    const mock = createBooksSupabaseMock();
+    supabaseCreateClientMock.mockReturnValueOnce(mock);
+
+    const app = await loadBooksApi();
+    const res = await request(app).get("/images/books/livros/x.pdf");
+    expect(res.status).toBe(403);
   });
 
   it("POST /books 401 sem Authorization", async () => {

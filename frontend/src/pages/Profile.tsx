@@ -80,7 +80,7 @@ const Profile = () => {
       try {
         const [booksRes, subsRes] = await Promise.all([
           api.getBooks(),
-          api.getAdminSubmissions(token),
+          api.adminGetSubmissions(token),
         ]);
         const books = booksRes?.books ?? [];
         const submissions = subsRes?.submissions ?? [];
@@ -256,17 +256,20 @@ const Profile = () => {
       toast({ title: "Preencha todos os campos", variant: "destructive" });
       return;
     }
-
-    const { goal } = await api.createGoal(
-      { title: newGoalTitle, target_books: parseInt(newGoalTarget), deadline: newGoalDeadline || null },
-      token
-    );
-    setGoals([goal as ReadingGoal, ...goals]);
-    setNewGoalTitle("");
-    setNewGoalTarget("");
-    setNewGoalDeadline("");
-    setShowNewGoal(false);
-    toast({ title: "Meta criada com sucesso!" });
+    try {
+      const { goal } = await api.createGoal(
+        { title: newGoalTitle, target_books: parseInt(newGoalTarget), deadline: newGoalDeadline || null },
+        token
+      );
+      setGoals([goal as ReadingGoal, ...goals]);
+      setNewGoalTitle("");
+      setNewGoalTarget("");
+      setNewGoalDeadline("");
+      setShowNewGoal(false);
+      toast({ title: "Meta criada com sucesso!" });
+    } catch {
+      toast({ title: "Erro ao criar meta", variant: "destructive" });
+    }
   };
 
   const handleDeleteGoal = async (goalId: string) => {
@@ -274,36 +277,38 @@ const Profile = () => {
       toast({ title: "Erro ao deletar meta", variant: "destructive" });
       return;
     }
-    await api.deleteGoal(goalId, token);
-
-    setGoals(goals.filter((g) => g.id !== goalId));
-    toast({ title: "Meta deletada!" });
+    try {
+      await api.deleteGoal(goalId, token);
+      setGoals(goals.filter((g) => g.id !== goalId));
+      toast({ title: "Meta deletada!" });
+    } catch {
+      toast({ title: "Erro ao deletar meta", variant: "destructive" });
+    }
   };
   const handleUpdateGoalProgress = async (goalId: string, increment: boolean) => {
     const goal = goals.find((g) => g.id === goalId);
-    if (!goal) return;
+    if (!goal || !token) return;
 
     const newCurrent = increment
       ? Math.min(goal.current_books + 1, goal.target_books)
       : Math.max(goal.current_books - 1, 0);
 
-    if (!token) {
+    try {
+      await api.updateGoal(
+        goalId,
+        { current_books: newCurrent, completed: newCurrent >= goal.target_books },
+        token
+      );
+      setGoals(
+        goals.map((g) =>
+          g.id === goalId
+            ? { ...g, current_books: newCurrent, completed: newCurrent >= goal.target_books }
+            : g
+        )
+      );
+    } catch {
       toast({ title: "Erro ao atualizar meta", variant: "destructive" });
-      return;
     }
-    await api.updateGoal(
-      goalId,
-      { current_books: newCurrent, completed: newCurrent >= goal.target_books },
-      token
-    );
-
-    setGoals(
-      goals.map((g) =>
-        g.id === goalId
-          ? { ...g, current_books: newCurrent, completed: newCurrent >= goal.target_books }
-          : g
-      )
-    );
   };
 
   const handleCreateAchievement = async () => {
@@ -325,15 +330,9 @@ const Profile = () => {
   const handleToggleAchievement = async (id: string) => {
     if (!token) return;
     try {
-      const { achieved } = await api.toggleAchievement(id, token);
-      if (achieved) {
-        setUserAchievementIds([...userAchievementIds, id]);
-        toast({ title: "Conquista alcançada! 🎉" });
-      } else {
-        setUserAchievementIds(userAchievementIds.filter(aid => aid !== id));
-      }
-    } catch (err) {
-      toast({ title: "Erro ao atualizar conquista", variant: "destructive" });
+      await api.toggleAchievement(id, token);
+    } catch {
+      toast({ title: "Conquistas são concedidas automaticamente", variant: "destructive" });
     }
   };
 

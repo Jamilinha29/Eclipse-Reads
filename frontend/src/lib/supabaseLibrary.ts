@@ -36,7 +36,18 @@ export async function fetchMeProfile() {
   return { profile: created ?? null };
 }
 
-export async function fetchMeSettings() {
+export type UserSettings = {
+  id?: string;
+  user_id?: string | null;
+  theme?: string | null;
+  sound_enabled?: boolean | null;
+  notifications_enabled?: boolean | null;
+  new_books_notifications?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function fetchMeSettings(): Promise<{ settings: UserSettings | null }> {
   const userId = await requireUserId();
   const { data, error } = await supabase
     .from("user_settings")
@@ -45,7 +56,7 @@ export async function fetchMeSettings() {
     .maybeSingle();
   if (error) throw new Error(error.message);
 
-  if (data) return { settings: data };
+  if (data) return { settings: data as UserSettings };
 
   const defaults = {
     user_id: userId,
@@ -60,7 +71,7 @@ export async function fetchMeSettings() {
     .select("*")
     .maybeSingle();
   if (createErr) throw new Error(createErr.message);
-  return { settings: created ?? null };
+  return { settings: (created as UserSettings | null) ?? null };
 }
 
 export async function upsertMeProfile(payload: {
@@ -143,7 +154,7 @@ export async function upsertMeSettings(payload: {
     .select("*")
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return { settings: data ?? null };
+  return { settings: (data as UserSettings | null) ?? null };
 }
 
 export async function fetchGoals() {
@@ -216,34 +227,11 @@ export async function fetchMeAchievements() {
     .select("achievement_id")
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
-  return { achievementIds: (data ?? []).map((row: { achievement_id: string }) => row.achievement_id) };
+  return { achievementIds: ((data ?? []) as unknown as { achievement_id: string }[]).map((row) => row.achievement_id) };
 }
 
-export async function toggleAchievement(id: string) {
-  const userId = await requireUserId();
-  const { data: existing, error: findErr } = await supabase
-    .from("user_achievements" as "favorites")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("achievement_id", id)
-    .maybeSingle();
-  if (findErr) throw new Error(findErr.message);
-
-  if (existing) {
-    const { error } = await supabase
-      .from("user_achievements" as "favorites")
-      .delete()
-      .eq("user_id", userId)
-      .eq("achievement_id", id);
-    if (error) throw new Error(error.message);
-    return { achieved: false };
-  }
-
-  const { error } = await supabase
-    .from("user_achievements" as "favorites")
-    .insert({ user_id: userId, achievement_id: id });
-  if (error) throw new Error(error.message);
-  return { achieved: true };
+export async function toggleAchievement(_id: string) {
+  throw new Error("Conquistas são concedidas automaticamente e não podem ser alteradas manualmente.");
 }
 
 export async function fetchMeStats() {

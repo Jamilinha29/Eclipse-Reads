@@ -61,9 +61,23 @@ export const api = {
     return access ? `${base}?access=${encodeURIComponent(access)}` : base;
   },
 
-  async getBookFileAccess(id: string) {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}/file-access`);
+  async getBookFileAccess(id: string, token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}/file-access`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return handleResponse(response) as Promise<{ url: string; access: string; expiresIn: number }>;
+  },
+
+  /** D-02: token no header, blob URL local (sem vazar em query/histórico). */
+  async fetchBookFileBlob(id: string, access: string): Promise<string> {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}/file`, {
+      headers: { "X-File-Access": access },
+    });
+    if (!response.ok) {
+      throw new Error("Falha ao carregar arquivo do livro");
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   },
 
   async getQuoteOfDay(options?: { rotate?: boolean }) {
@@ -223,6 +237,13 @@ export const api = {
   },
 
   // Admin (books-api) — Bearer + role admin
+  async adminGetBooks(token: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/admin/books`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    return handleResponse(response);
+  },
+
   async adminGetSubmissions(token: string) {
     const response = await fetch(`${BOOKS_API_BASE_URL}/admin/submissions`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

@@ -148,6 +148,9 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
       if (name === "has_role") {
         return Promise.resolve({ data: true, error: null });
       }
+      if (name === "approve_book_submission") {
+        return Promise.resolve({ data: { ok: true, book_id: "approved-book-id" }, error: null });
+      }
       return Promise.resolve({ data: null, error: { message: `unknown rpc ${name}` } });
     }),
   };

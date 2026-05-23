@@ -23,8 +23,7 @@ describe("cadastro/cadastro-email", () => {
     expect(response.body.error).toContain("db unreachable");
 
     const metrics = await request(app).get("/metrics");
-    expect(metrics.status).toBe(200);
-    expect(metrics.body.requests).toBe(1);
+    expect(metrics.status).toBe(401);
   });
 });
 

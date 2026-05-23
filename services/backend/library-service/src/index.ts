@@ -151,6 +151,22 @@ function rewriteProfileMediaUrl(url: string | null | undefined, req: Request): s
   return url;
 }
 
+function sanitizeAvatarStoragePath(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\\/g, "/");
+  if (!trimmed || trimmed.includes("..") || trimmed.startsWith("/")) return null;
+  const segments = trimmed.split("/").filter(Boolean);
+  if (segments.some((s) => s === "." || s === "..")) return null;
+  const path = segments.join("/");
+  // {userId}/avatar.ext ou {userId}/banner.ext
+  if (!/^[0-9a-f-]{36}\/(avatar|banner)\.[a-z0-9]+$/i.test(path)) return null;
+  return path;
+}
+
+function toPublicLibraryBook(book: Record<string, unknown>) {
+  const { file_path: _fp, ...rest } = book;
+  return rest;
+}
+
 // GET /library?type=favoritos  (or 'lendo' or 'lidos')
 // Requires Authorization: Bearer <token>
 app.get("/library", async (req: Request, res: Response) => {
@@ -159,10 +175,10 @@ app.get("/library", async (req: Request, res: Response) => {
     const user = await getUserFromAuthHeader(authHeader);
 
     const type = (req.query.type as string) ?? "favoritos";
-    let tableName = "favorites";
-    if (type === "lendo") tableName = "reading";
-    else if (type === "lidos") tableName = "read";
-    else if (type === "favoritos") tableName = "favorites";
+    const tableName = resolveTable(type);
+    if (!tableName) {
+      return res.status(400).json({ error: "type must be favoritos, lendo or lidos" });
+    }
 
     // Use service_role key to query cross-table (safer)
     const svc = svcClient();
@@ -193,7 +209,9 @@ app.get("/library", async (req: Request, res: Response) => {
       return res.status(500).json({ error: msg });
     }
 
-    return res.json({ books });
+    return res.json({
+      books: (books ?? []).map((book) => toPublicLibraryBook(book as Record<string, unknown>)),
+    });
   } catch (err: any) {
     console.error("❌ Unexpected error /library:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
@@ -202,10 +220,11 @@ app.get("/library", async (req: Request, res: Response) => {
   }
 });
 
-const resolveTable = (type?: string) => {
+const resolveTable = (type?: string): string | null => {
   if (type === "lendo") return "reading";
   if (type === "lidos") return "read";
-  return "favorites";
+  if (type === "favoritos") return "favorites";
+  return null;
 };
 
 const getAuthenticatedUserId = async (authHeader: string) => {
@@ -226,10 +245,23 @@ app.post("/library/:type", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: "not authenticated" });
 
     const tableName = resolveTable(req.params.type);
+    if (!tableName) return res.status(400).json({ error: "type must be favoritos, lendo or lidos" });
     const bookId = req.body?.book_id;
     if (!bookId) return res.status(400).json({ error: "book_id is required" });
 
     const svc = svcClient();
+
+    const { data: bookRow, error: bookLookupErr } = await svc
+      .from("books")
+      .select("id")
+      .eq("id", bookId)
+      .maybeSingle();
+    if (bookLookupErr) {
+      console.error("❌ Database error validating book_id:", bookLookupErr);
+      const msg = process.env.NODE_ENV === "test" ? bookLookupErr.message : "Erro ao validar livro.";
+      return res.status(500).json({ error: msg });
+    }
+    if (!bookRow) return res.status(404).json({ error: "book not found" });
 
     // Workaround para "no unique constraint matching ON CONFLICT"
     const { data: existing } = await svc
@@ -266,6 +298,7 @@ app.delete("/library/:type/:bookId", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: "not authenticated" });
 
     const tableName = resolveTable(req.params.type);
+    if (!tableName) return res.status(400).json({ error: "type must be favoritos, lendo or lidos" });
     const bookId = req.params.bookId;
     if (!bookId) return res.status(400).json({ error: "book_id is required" });
 
@@ -358,7 +391,7 @@ app.get("/me/profile", async (req: Request, res: Response) => {
 function isAllowedProfileMediaUrl(url: string): boolean {
   const trimmed = url.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith("data:image/")) return true;
+  if (trimmed.startsWith("data:")) return false;
   if (trimmed.includes("/images/avatars/")) return true;
   if (trimmed.includes("supabase.co/storage/") && trimmed.includes("/avatars/")) return true;
   return false;
@@ -746,8 +779,17 @@ app.put("/reading-progress/:bookId", async (req: Request, res: Response) => {
 // Proxy GET /images/avatars/*
 app.get("/images/avatars/*", async (req: Request, res: Response) => {
   try {
-    const filePath = req.params[0];
-    if (!filePath) return res.status(400).json({ error: "path is required" });
+    const rawPath = req.params[0];
+    if (!rawPath) return res.status(400).json({ error: "path is required" });
+
+    let decoded = rawPath;
+    try {
+      decoded = decodeURIComponent(rawPath);
+    } catch {
+      /* keep raw */
+    }
+    const filePath = sanitizeAvatarStoragePath(decoded);
+    if (!filePath) return res.status(400).json({ error: "caminho de avatar inválido" });
 
     const svc = svcClient();
     const { data: fileData, error: fileError } = await svc.storage.from(PROFILE_MEDIA_BUCKET).download(filePath);
@@ -791,45 +833,10 @@ app.get("/achievements", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/me/achievements/:id/toggle", async (req: Request, res: Response) => {
-  try {
-    const authHeader = requireAuthHeader(req);
-    const user = await getUserFromAuthHeader(authHeader);
-    const achievementId = req.params.id;
-    const svc = svcClient();
-
-    const { data: existing } = await svc
-      .from("user_achievements")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("achievement_id", achievementId)
-      .maybeSingle();
-
-    if (existing) {
-      const { error: delErr } = await svc
-        .from("user_achievements")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("achievement_id", achievementId);
-      if (delErr) {
-        console.error("❌ Database error /me/achievements toggle delete:", delErr);
-        return res.status(500).json({ error: "Erro ao remover conquista." });
-      }
-      return res.json({ achieved: false });
-    }
-
-    const { error: insErr } = await svc
-      .from("user_achievements")
-      .insert({ user_id: user.id, achievement_id: achievementId });
-    if (insErr) {
-      console.error("❌ Database error /me/achievements toggle insert:", insErr);
-      return res.status(500).json({ error: "Erro ao registrar conquista." });
-    }
-    return res.json({ achieved: true });
-  } catch (err: any) {
-    console.error("❌ Unexpected error /me/achievements/toggle:", err);
-    return res.status(500).json({ error: "Erro ao atualizar conquista." });
-  }
+app.post("/me/achievements/:id/toggle", async (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: "Conquistas são concedidas automaticamente e não podem ser alteradas manualmente.",
+  });
 });
 
 app.get("/me/achievements", async (req: Request, res: Response) => {

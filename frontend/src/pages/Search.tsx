@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search as SearchIcon, Sparkles, Clock, ArrowRight, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import BookCard from "@/components/BookCard";
+import CatalogBooksStatus from "@/components/CatalogBooksStatus";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,8 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { useCatalogBooks } from "@/hooks/useCatalogBooks";
 
 const PAGE_SIZE = 24;
 
@@ -39,8 +39,7 @@ const parseCategories = (categoryRaw: string) =>
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("Todos os Gêneros");
-  const [books, setBooks] = useState<Book[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { books, status, message, reload } = useCatalogBooks();
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const genres = [
@@ -64,30 +63,6 @@ const Search = () => {
     "Literatura Estrangeira",
     "Literatura Nacional",
   ];
-
-  useEffect(() => {
-    const loadBooks = async () => {
-      try {
-        setLoadError(null);
-        const response = await api.getBooks();
-        if (response?.books) {
-          const seen = new Set();
-          const unique = response.books.filter((b: Book) => {
-            const key = `${b.title.toLowerCase() || 'unnamed'}-${b.author.toLowerCase() || 'unknown'}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          setBooks(unique);
-        }
-      } catch {
-        setLoadError("Não foi possível carregar os livros.");
-        toast.error("Erro ao carregar catálogo");
-      }
-    };
-
-    loadBooks();
-  }, []);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -162,10 +137,11 @@ const Search = () => {
             )}
           </div>
         </div>
+        {status !== "ready" ? (
+          <CatalogBooksStatus status={status} message={message} onRetry={() => void reload()} />
+        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {loadError ? (
-            <div className="col-span-full text-center py-12 text-destructive">{loadError}</div>
-          ) : filteredBooks.length === 0 ? (
+          {filteredBooks.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
               Nenhum livro encontrado
             </div>
@@ -182,6 +158,7 @@ const Search = () => {
             ))
           )}
         </div>
+        )}
         
         {filteredBooks.length > 0 && hasMore && (
           <div className="flex justify-center mt-8">

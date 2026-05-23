@@ -4,6 +4,7 @@ services:
   books-api:
     build:
       context: ./books-api
+      dockerfile: Dockerfile
     env_file:
       - ./envs/books-api.env
     ports:
@@ -17,6 +18,7 @@ services:
   auth-proxy:
     build:
       context: ./auth-proxy
+      dockerfile: Dockerfile
     env_file:
       - ./envs/auth-proxy.env
     ports:
@@ -30,6 +32,7 @@ services:
   library-service:
     build:
       context: ./library-service
+      dockerfile: Dockerfile
     env_file:
       - ./envs/library-service.env
     ports:

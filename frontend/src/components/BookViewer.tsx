@@ -1,11 +1,32 @@
 import { useState, useEffect, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import ePub from "epubjs";
+
+interface EpubRendition {
+  display: (target?: string) => void;
+  destroy: () => void;
+  on: (event: string, cb: (location: { start?: { displayed?: { page?: number } } }) => void) => void;
+  themes: {
+    default: (colors: Record<string, string>) => void;
+    fontSize: (size: string) => void;
+    font: (font: string) => void;
+    override: (prop: string, val: string) => void;
+  };
+}
+
+interface EpubBook {
+  renderTo: (element: HTMLElement, options: Record<string, unknown>) => EpubRendition;
+  loaded: { navigation: Promise<{ toc?: unknown }> };
+  ready: Promise<unknown>;
+  locations: { generate: (chunk: number) => Promise<string[]> };
+}
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Configura o worker do PDF.js
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 interface BookViewerProps {
   fileUrl: string;
@@ -39,6 +60,7 @@ export const BookViewer = ({
 }: BookViewerProps) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [epubBook, setEpubBook] = useState<any>(null);
+  const [epubLocations, setEpubLocations] = useState<string[]>([]);
   const epubViewerRef = useRef<HTMLDivElement>(null);
 
   // Determina o tipo de arquivo pela extensão
@@ -60,7 +82,7 @@ export const BookViewer = ({
   // Visualizador de EPUB
   useEffect(() => {
     if (normalizedFileType === 'epub' && fileUrl && epubViewerRef.current) {
-      const book = ePub(fileUrl);
+      const book = ePub(fileUrl) as EpubBook;
       
       // Configura renderização com base no modo de leitura
       const rendition = book.renderTo(epubViewerRef.current, {
@@ -70,7 +92,7 @@ export const BookViewer = ({
         spread: 'none'
       });
       
-      const theme = "light" as const;
+      const theme = document.documentElement.classList.contains("dark") ? "dark" : "light";
       const fontSize = 18;
       const fontFamily = "serif" as const;
       const fontWeight = "normal" as const;
@@ -115,9 +137,8 @@ export const BookViewer = ({
       });
       
       // Obtém o total de localizações para rastreamento de páginas
-      book.ready.then(() => {
-        return book.locations.generate(1024);
-      }).then((locations: any) => {
+      book.ready.then(() => book.locations.generate(1024)).then((locations: string[]) => {
+        setEpubLocations(locations);
         onTotalPagesChange(locations.length);
       });
       
@@ -138,15 +159,11 @@ export const BookViewer = ({
 
   // Trata navegação de páginas para EPUB
   useEffect(() => {
-    if (epubBook?.book && currentPage > 0) {
-      epubBook.book.locations.generate(1024).then((locations: any) => {
-        const cfi = locations[currentPage - 1];
-        if (cfi) {
-          epubBook.rendition.display(cfi);
-        }
-      });
+    if (epubBook?.rendition && currentPage > 0 && epubLocations.length > 0) {
+      const cfi = epubLocations[currentPage - 1];
+      if (cfi) epubBook.rendition.display(cfi);
     }
-  }, [currentPage, epubBook]);
+  }, [currentPage, epubBook, epubLocations]);
 
   if (normalizedFileType === 'pdf') {
     const baseMaxWidth = pageSize === "fullscreen" 
@@ -221,9 +238,18 @@ export const BookViewer = ({
         <p className="text-muted-foreground mb-4">
           Arquivos MOBI não são suportados para visualização web.
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mb-4">
           Faça o download para ler em um leitor Kindle ou compatível.
         </p>
+        {fileUrl && (
+          <a
+            href={fileUrl}
+            download
+            className="text-primary underline hover:opacity-80 text-sm"
+          >
+            Baixar arquivo MOBI
+          </a>
+        )}
       </div>
     );
   }

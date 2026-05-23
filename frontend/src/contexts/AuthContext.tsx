@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  GUEST_AUTH_FLAG_KEY,
   GUEST_AVATAR_KEY,
   GUEST_BANNER_KEY,
+  clearGuestSession,
+  isGuestSessionActive,
 } from "@/integrations/supabase/profileMediaStorage";
 import { THEME_STORAGE_KEY, getStoredTheme } from "@/lib/themeStorage";
 import { api } from "@/lib/api";
@@ -105,7 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
-        localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
+        clearGuestSession();
         setUserId(currentSession.user.id);
         setAuthType(authTypeFromUser(currentSession.user));
         setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
@@ -119,11 +120,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setProfileReady(false);
         setUserId(null);
-        if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
+        if (isGuestSessionActive()) {
           setAuthType("guest");
           setAvatarImage(localStorage.getItem(GUEST_AVATAR_KEY) || "");
           setBannerImage(localStorage.getItem(GUEST_BANNER_KEY) || "");
         } else {
+          clearGuestSession();
           setAuthType(null);
           setAvatarImage("");
           setBannerImage("");
@@ -138,11 +140,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
-        localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
+        clearGuestSession();
         setUserId(currentSession.user.id);
         setAuthType(authTypeFromUser(currentSession.user));
         setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
-      } else if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
+      } else if (isGuestSessionActive()) {
         setUserId(null);
         setAuthType("guest");
         setAvatarImage(localStorage.getItem(GUEST_AVATAR_KEY) || "");
@@ -201,9 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem(GUEST_AUTH_FLAG_KEY);
-    localStorage.removeItem(GUEST_AVATAR_KEY);
-    localStorage.removeItem(GUEST_BANNER_KEY);
+    clearGuestSession();
     setProfileReady(false);
     setAuthType(null);
     setAvatarImage("");

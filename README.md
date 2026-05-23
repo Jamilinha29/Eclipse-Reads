@@ -66,8 +66,8 @@ Eclipse-Reads/
 │   │   └── envs/               # *.env locais (gitignored)
 │   └── main-service/
 │       └── supabase/
-│           ├── migrations/
-│           │   └── all_migrations_combined.sql
+│           ├── bootstrap/all_migrations_combined.sql   # projeto NOVO (manual)
+│           └── migrations/                           # incrementais (npm run db:push)
 │           └── functions/
 ├── tests/
 │   ├── api/
@@ -212,7 +212,9 @@ PORT=4100
 
 > A **service role** fica somente nos backends. Nunca exponha no frontend.
 
-Schema do banco (aplicar uma vez no SQL Editor do Supabase): `services/main-service/supabase/migrations/all_migrations_combined.sql`.
+Schema do banco:
+- **Projeto novo (vazio):** `services/main-service/supabase/bootstrap/all_migrations_combined.sql` (SQL Editor, uma vez).
+- **Alterações incrementais:** `services/main-service/supabase/migrations/` → `npm run db:push` (ver `services/main-service/supabase/README.md`).
 
 ### 4) Executar
 

@@ -50,16 +50,17 @@ const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2 transition-smooth hover:opacity-80">
-          <img src={logo} alt="Eclipse Reads" className="h-8 w-8" />
+          <img src={logo} alt="Eclipse Reads" className="h-10 w-10" />
           <span className="text-lg font-bold">Eclipse Reads</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-1" aria-label="Navegação principal">
           <Link to="/">
             <Button
               variant={isActive("/") ? "secondary" : "ghost"}
               size="sm"
               className="gap-2"
+              aria-current={isActive("/") ? "page" : undefined}
             >
               <Home className="h-4 w-4" />
               Home

@@ -13,7 +13,7 @@ function buildGoogleOAuthCall(redirectTo: string) {
 
 describe("OAuth Google (contrato client-side)", () => {
   it("usa provider google e redirectTo absoluto", () => {
-    const redirect = "http://localhost:5173/auth";
+    const redirect = "http://localhost:8080/auth-callback";
     const o = buildGoogleOAuthCall(redirect);
     expect(o.provider).toBe("google");
     expect(o.options.redirectTo).toBe(redirect);

@@ -12,12 +12,37 @@ function parseGuestList(raw: string | null): string[] {
   }
 }
 
+const GUEST_BOOK_LIMIT = 7;
+
+/** D-03: limita listas guest mesmo se localStorage for adulterado. */
+function clampGuestLists(
+  fav: string[],
+  reading: string[],
+  readList: string[],
+  max = GUEST_BOOK_LIMIT,
+): [string[], string[], string[]] {
+  const seen = new Set<string>();
+  const out: [string[], string[], string[]] = [[], [], []];
+  const inputs = [fav, reading, readList] as const;
+  for (let i = 0; i < inputs.length; i++) {
+    for (const id of inputs[i]) {
+      if (seen.size >= max) break;
+      if (!seen.has(id)) {
+        seen.add(id);
+        out[i].push(id);
+      }
+    }
+    if (seen.size >= max) break;
+  }
+  return out;
+}
+
 export interface LibraryBook {
   id: string;
   title: string;
   author: string;
   cover_image?: string | null;
-  rating?: number;
+  rating?: number | null;
   category?: string;
 }
 
@@ -89,9 +114,14 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadLibrary = async () => {
       if (authType === "guest") {
-        setFavorites(parseGuestList(localStorage.getItem("guest_favorites")));
-        setReading(parseGuestList(localStorage.getItem("guest_reading")));
-        setRead(parseGuestList(localStorage.getItem("guest_read")));
+        const [f, r, rd] = clampGuestLists(
+          parseGuestList(localStorage.getItem("guest_favorites")),
+          parseGuestList(localStorage.getItem("guest_reading")),
+          parseGuestList(localStorage.getItem("guest_read")),
+        );
+        setFavorites(f);
+        setReading(r);
+        setRead(rd);
         setLibraryBooks({ favoritos: [], lendo: [], lidos: [] });
         return;
       }

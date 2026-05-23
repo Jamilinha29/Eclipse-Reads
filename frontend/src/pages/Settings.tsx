@@ -22,6 +22,7 @@ const Settings = () => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [newBooksNotifications, setNewBooksNotifications] = useState(true);
   const settingsHydratedRef = useRef(false);
+  const skipFirstSaveRef = useRef(true);
 
   useEffect(() => {
     setLocalUsername(username);
@@ -59,7 +60,7 @@ const Settings = () => {
   const saveSettings = useCallback(async () => {
     if (!userId || !token) return;
     try {
-      const response = await api.updateMeSettings(
+      await api.updateMeSettings(
         {
           theme,
           sound_enabled: soundEnabled,
@@ -67,9 +68,6 @@ const Settings = () => {
         },
         token
       );
-      if (response.error) {
-        toast.error(response.error);
-      }
     } catch {
       toast.error("Não foi possível conectar ao servidor de configurações.");
     }
@@ -78,6 +76,10 @@ const Settings = () => {
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
     setGlobalTheme(theme);
+    if (skipFirstSaveRef.current) {
+      skipFirstSaveRef.current = false;
+      return;
+    }
     if (userId) {
       saveSettings();
     }

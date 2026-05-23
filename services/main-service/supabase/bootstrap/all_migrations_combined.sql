@@ -1,7 +1,12 @@
--- Eclipse Reads — schema completo do banco (único arquivo de migração)
+-- Eclipse Reads — schema completo do banco (referência / projeto NOVO)
 -- Projeto Supabase: wnaymuusxwvawmbieukm
 -- Storage bucket `books`: pasta `livros/` (PDF/EPUB/MOBI), pasta `covers/` (capas)
--- Aplicar uma vez em projeto vazio: SQL Editor → colar tudo → Run
+--
+-- USO:
+--   • Projeto Supabase VAZIO: colar no SQL Editor uma vez.
+--   • Projeto JÁ migrado: NÃO rode de novo — use npm run db:push (migrações incrementais).
+--
+-- Migrações automáticas (CLI): services/main-service/supabase/migrations/
 -- https://supabase.com/dashboard/project/wnaymuusxwvawmbieukm/sql/new
 
 -- ========== 20251031212951_79e38e8a-4654-4649-836d-fbbb580fdec9.sql ==========
@@ -22,15 +27,15 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 -- RLS Policies for profiles
 CREATE POLICY "Users can view their own profile"
 ON public.profiles FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own profile"
 ON public.profiles FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own profile"
 ON public.profiles FOR UPDATE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create favorites table
 CREATE TABLE public.favorites (
@@ -44,15 +49,15 @@ ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own favorites"
 ON public.favorites FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own favorites"
 ON public.favorites FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own favorites"
 ON public.favorites FOR DELETE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create reading table
 CREATE TABLE public.reading (
@@ -66,15 +71,15 @@ ALTER TABLE public.reading ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own reading list"
 ON public.reading FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own reading list"
 ON public.reading FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own reading list"
 ON public.reading FOR DELETE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create read table
 CREATE TABLE public.read (
@@ -88,15 +93,15 @@ ALTER TABLE public.read ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own read list"
 ON public.read FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own read list"
 ON public.read FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own read list"
 ON public.read FOR DELETE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create reading_goals table
 CREATE TABLE public.reading_goals (
@@ -115,19 +120,19 @@ ALTER TABLE public.reading_goals ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own goals"
 ON public.reading_goals FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own goals"
 ON public.reading_goals FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own goals"
 ON public.reading_goals FOR UPDATE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own goals"
 ON public.reading_goals FOR DELETE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create settings table
 CREATE TABLE public.user_settings (
@@ -144,15 +149,15 @@ ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own settings"
 ON public.user_settings FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own settings"
 ON public.user_settings FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own settings"
 ON public.user_settings FOR UPDATE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Create function to update timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -221,22 +226,22 @@ ALTER TABLE public.reading_progress ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own progress"
 ON public.reading_progress
 FOR SELECT
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own progress"
 ON public.reading_progress
 FOR INSERT
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own progress"
 ON public.reading_progress
 FOR UPDATE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own progress"
 ON public.reading_progress
 FOR DELETE
-USING (auth.uid() = user_id OR user_id IS NULL);
+USING (auth.uid() = user_id);
 
 -- Trigger para atualizar updated_at automaticamente
 CREATE TRIGGER update_quotes_updated_at
@@ -448,6 +453,14 @@ FOR SELECT
 TO authenticated, anon
 USING (true);
 
+-- C-02: clientes Supabase não recebem file_path (service_role / books-api mantêm acesso total)
+REVOKE ALL ON TABLE public.books FROM anon;
+REVOKE ALL ON TABLE public.books FROM authenticated;
+GRANT SELECT (
+  id, title, author, description, category, cover_image, rating, file_type,
+  created_at, updated_at, submission_id, age_rating
+) ON TABLE public.books TO anon, authenticated;
+
 -- Policy: Only admins can insert books
 CREATE POLICY "Admins can insert books"
 ON public.books
@@ -506,12 +519,15 @@ BEFORE UPDATE ON public.books
 FOR EACH ROW
 EXECUTE FUNCTION public.update_books_updated_at();
 
--- Storage policies for books bucket to allow authenticated users to read
-CREATE POLICY "Authenticated users can download books"
+-- Storage: leitura direta limitada a capas (livros/ só via books-api + token)
+CREATE POLICY "Read cover images in books bucket"
 ON storage.objects
 FOR SELECT
-TO authenticated
-USING (bucket_id = 'books');
+TO authenticated, anon
+USING (
+  bucket_id = 'books' AND
+  (storage.foldername(name))[1] = 'covers'
+);
 
 -- Allow admins to upload to books bucket
 CREATE POLICY "Admins can upload books"
@@ -786,15 +802,7 @@ ON public.user_achievements FOR SELECT
 TO authenticated
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert their own user_achievements"
-ON public.user_achievements FOR INSERT
-TO authenticated
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own user_achievements"
-ON public.user_achievements FOR DELETE
-TO authenticated
-USING (auth.uid() = user_id);
+-- Conquistas: INSERT/DELETE apenas via service_role (backend); usuário só lê as próprias
 
 -- Settings: new books notifications
 ALTER TABLE public.user_settings
@@ -872,3 +880,6 @@ WITH CHECK (
     WHERE user_id = auth.uid() AND role = 'admin'
   )
 );
+
+-- ========== 20260523120000_storage_select_covers_only.sql ==========
+-- (Política de capas já aplicada acima; bloco mantido para histórico de migrações.)

@@ -28,6 +28,9 @@ jobs:
       - name: Run root tests
         run: npm test
 
+      - name: Test coverage (backends, D-10)
+        run: npm run test:coverage
+
 #FRONTEND TESTS
   frontend:
     runs-on: ubuntu-latest
@@ -48,6 +51,11 @@ jobs:
         run: |
           cd frontend
           npm run lint
+
+      - name: TypeScript check (frontend)
+        run: |
+          cd frontend
+          npx tsc -p tsconfig.app.json --noEmit
 
       - name: Build frontend
         env:
@@ -112,21 +120,21 @@ jobs:
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/books-api:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/books-api
+          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/books-api
           docker push $IMAGE_LOWER
 
       - name: Build & Push Auth Proxy
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/auth-proxy:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/auth-proxy
+          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/auth-proxy
           docker push $IMAGE_LOWER
 
       - name: Build & Push Library Service
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/library-service:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/library-service
+          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/library-service
           docker push $IMAGE_LOWER
 
 #DEPLOY FRONTEND
@@ -146,16 +154,51 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend for production
+      - name: Pull Vercel project settings
         env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: frontend
+
+      - name: Build with Vercel CLI (prebuilt, D-08)
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VITE_BOOKS_API_URL: ${{ secrets.VITE_BOOKS_API_URL }}
           VITE_LIBRARY_API_URL: ${{ secrets.VITE_LIBRARY_API_URL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-        run: cd frontend && npm run build
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: frontend
 
-      - name: Deploy to Vercel
+      - name: Deploy prebuilt to Vercel
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --name eclipse-reads
+        run: npx vercel deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: frontend
+
+  e2e-playwright:
+    runs-on: ubuntu-latest
+    needs: [frontend, root-tests]
+    if: github.event_name == 'push' && vars.PLAYWRIGHT_RUN == '1'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke (D-07)
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080' }}

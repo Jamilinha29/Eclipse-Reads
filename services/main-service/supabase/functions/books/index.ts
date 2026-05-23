@@ -3,7 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.84.0'
 // @ts-ignore - Suporte para Deno
 declare const Deno: any;
 
-// Suporte para ambientes Deno e Node.js
 const getEnv = (key: string): string => {
   // @ts-ignore
   if (typeof Deno !== 'undefined' && Deno.env) {
@@ -13,12 +12,17 @@ const getEnv = (key: string): string => {
   return process.env[key] ?? '';
 };
 
+const ALLOWED_ORIGIN = getEnv('ALLOWED_ORIGIN') || 'https://eclipse-reads.vercel.app';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Função handler compatível com Deno e Node.js
+/** Campos públicos — nunca expor file_path (C-05). */
+const PUBLIC_BOOK_FIELDS =
+  'id, title, author, description, category, cover_image, rating, file_type, created_at, age_rating';
+
 const bookHandler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -26,68 +30,65 @@ const bookHandler = async (req: Request): Promise<Response> => {
 
   try {
     const supabaseUrl = getEnv('SUPABASE_URL');
-    const supabaseKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas');
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('SUPABASE_URL ou SUPABASE_ANON_KEY não configuradas');
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const url = new URL(req.url);
     const bookId = url.searchParams.get('id');
-    
+
     if (bookId) {
-      // Buscar livro específico
       const { data, error } = await supabaseClient
         .from('books')
-        .select('*')
+        .select(PUBLIC_BOOK_FIELDS)
         .eq('id', bookId)
         .maybeSingle();
 
       if (error) throw error;
 
       if (!data) {
-        return new Response(
-          JSON.stringify({ error: 'Livro não encontrado' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-        );
+        return new Response(JSON.stringify({ error: 'Livro não encontrado' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404,
+        });
       }
 
-      return new Response(
-        JSON.stringify({ book: data }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      // Buscar todos os livros
-      const { data, error } = await supabaseClient
-        .from('books')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      return new Response(
-        JSON.stringify({ books: data ?? [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ book: data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
+
+    const { data, error } = await supabaseClient
+      .from('books')
+      .select(PUBLIC_BOOK_FIELDS)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return new Response(JSON.stringify({ books: data ?? [] }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     console.error('Erro ao buscar livros:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    );
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    });
   }
 };
 
-// Suporte para Deno
 // @ts-ignore
 if (typeof Deno !== 'undefined') {
   // @ts-ignore
   Deno.serve(bookHandler);
 }
 
-// Exportar para Node.js
 export default bookHandler;

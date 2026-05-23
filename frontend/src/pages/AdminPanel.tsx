@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { storageFileBasename } from "@/lib/storageBooks";
 import { ArrowLeft, CheckCircle, XCircle, Shield, Eye, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +41,7 @@ interface StorageFile {
   updated_at?: string;
   created_at?: string;
   last_accessed_at?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown> | null;
 }
 
 interface BookForm {
@@ -69,7 +70,7 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState("submissions");
   const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
 
   const applyBooksToState = (data: any[]) => {
     if (!data?.length) {
@@ -97,9 +98,10 @@ const AdminPanel = () => {
   };
 
   const loadExistingBooks = useCallback(async () => {
-    const { books } = await api.getBooks();
+    if (!token) return;
+    const { books } = await api.adminGetBooks(token);
     applyBooksToState(books || []);
-  }, []);
+  }, [token]);
 
   const loadStorageFiles = useCallback(async () => {
     if (!token) return;
@@ -133,8 +135,12 @@ const AdminPanel = () => {
   }, [token]);
 
   useEffect(() => {
-    // Mantém loading até existir token (sessão Supabase ainda carregando)
-    if (!token) return;
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      navigate("/auth");
+      return;
+    }
 
     let cancelled = false;
     (async () => {
@@ -151,7 +157,7 @@ const AdminPanel = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, loadSubmissions, loadExistingBooks]);
+  }, [token, authLoading, navigate, loadSubmissions, loadExistingBooks]);
 
   // Verifica parâmetros da URL para a aba inicial
   useEffect(() => {
@@ -252,7 +258,7 @@ const AdminPanel = () => {
       toast.error("Sessão inválida");
       return null;
     }
-    const basename = bookFileName.replace(/\.[^/.]+$/, "") || "cover";
+    const basename = storageFileBasename(bookFileName).replace(/\.[^/.]+$/, "") || "cover";
     try {
       const { publicUrl } = await api.adminUploadCover(file, basename, token);
       return publicUrl as string;
@@ -526,13 +532,13 @@ const AdminPanel = () => {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-bold">{file.name}</h3>
+                              <h3 className="text-lg font-bold">{storageFileBasename(file.name)}</h3>
                               {isAlreadyImported && (
                                 <Badge variant="default">Importado</Badge>
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground mb-4">
-                              Tamanho: {file.metadata?.size ? (file.metadata.size / 1024 / 1024).toFixed(2) + ' MB' : 'Desconhecido'}
+                              Tamanho: {file.metadata?.size != null ? (Number(file.metadata.size) / 1024 / 1024).toFixed(2) + ' MB' : 'Desconhecido'}
                             </p>
                             {processedFiles.has(file.name) ? (
                               <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 flex flex-col items-center gap-3 text-center">

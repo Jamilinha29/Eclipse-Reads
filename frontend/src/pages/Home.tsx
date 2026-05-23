@@ -2,11 +2,14 @@ import { ArrowRight, Sparkles, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import BookCard from "@/components/BookCard";
+import CatalogBooksStatus from "@/components/CatalogBooksStatus";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCatalogBooks } from "@/hooks/useCatalogBooks";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { getFallbackDailyQuote } from "@/lib/dailyQuoteFallback";
+import { logCatalogError } from "@/lib/catalogLoad";
 
 interface Quote {
   id: string;
@@ -15,54 +18,33 @@ interface Quote {
   category: string | null;
 }
 
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  category: string;
-  cover_image: string | null;
-  rating: number;
-}
-
 const Home = () => {
   const { isLoggedIn, authType, username, theme } = useAuth();
   const [dailyQuote, setDailyQuote] = useState<Quote | null>(null);
-  const [books, setBooks] = useState<Book[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { books, status, message, reload } = useCatalogBooks(12);
 
   useEffect(() => {
     const loadQuotes = async () => {
       try {
         const response = await api.getQuoteOfDay({ rotate: true });
-        setDailyQuote(response?.quote ?? null);
-      } catch {
-        /* citação é opcional na home */
-      }
-    };
-
-    const loadBooks = async () => {
-      try {
-        setLoadError(null);
-        const response = await api.getBooks();
-        if (response?.books) {
-          const seen = new Set();
-          const unique = response.books.filter((b: Book) => {
-            const key = `${b.title.toLowerCase()}-${b.author.toLowerCase()}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          setBooks(unique.slice(0, 12));
+        if (response?.quote) {
+          setDailyQuote(response.quote);
+          return;
         }
-      } catch {
-        setLoadError("Não foi possível carregar os livros. Verifique se os serviços backend estão no ar.");
-        toast.error("Erro ao carregar catálogo");
+        setDailyQuote(getFallbackDailyQuote());
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          logCatalogError(err);
+          console.info("[Eclipse Reads] Frase do dia: usando fallback local (books-api indisponível ou quotes vazia).");
+        }
+        setDailyQuote(getFallbackDailyQuote());
       }
     };
 
-    loadQuotes();
-    loadBooks();
+    void loadQuotes();
   }, []);
+
+  const showGrid = status === "ready" && books.length > 0;
 
   return (
     <div className="min-h-screen pb-8">
@@ -96,7 +78,7 @@ const Home = () => {
           </Card>
         )}
 
-        {isLoggedIn && (authType === "email" || authType === "google") && dailyQuote && (
+        {isLoggedIn && dailyQuote && (
           <Card className={`mt-6 relative overflow-hidden border-0 shadow-glow ${
             theme === "light" 
               ? "bg-gradient-to-br from-slate-400 to-slate-500 text-slate-900" 
@@ -140,12 +122,8 @@ const Home = () => {
             </Button>
           </Link>
         </div>
-        {loadError ? (
-          <div className="text-center py-12 text-destructive">{loadError}</div>
-        ) : books.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Nenhum livro disponível ainda
-          </div>
+        {!showGrid ? (
+          <CatalogBooksStatus status={status} message={message} onRetry={() => void reload()} />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {books.slice(0, 6).map((book) => (
@@ -175,12 +153,8 @@ const Home = () => {
             </Button>
           </Link>
         </div>
-        {loadError ? (
-          <div className="text-center py-12 text-destructive">{loadError}</div>
-        ) : books.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Nenhum livro disponível ainda
-          </div>
+        {!showGrid ? (
+          <CatalogBooksStatus status={status} message={message} onRetry={() => void reload()} />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {books.slice(6, 12).map((book) => (

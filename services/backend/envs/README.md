@@ -37,3 +37,12 @@ Se os `.env` já estiveram no repositório antes, o próximo commit remove-os do
 - No DevTools você verá `Accept-Profile: public` e `apikey` — comportamento normal do Supabase/PostgREST.
 - A proteção de dados é **RLS** (políticas no SQL), não esconder a chave anon.
 - Na Vercel: `SUPABASE_SERVICE_KEY` só nas funções serverless (`api/*`), **sem** prefixo `VITE_`.
+
+## D-01 — service_role nos backends (decisão de design)
+
+Os microserviços `books-api` e `library-service` usam **service_role** no servidor para contornar RLS em operações administrativas e de catálogo. Isso é intencional neste projeto acadêmico:
+
+- **Mitigação:** cada rota valida JWT/`requireAdmin` antes de chamar o Supabase; RLS continua protegendo acesso direto via PostgREST/anon.
+- **Alternativa futura:** RPCs `SECURITY DEFINER` + chave anon no backend, ou PostgREST com JWT do usuário repassado.
+
+Não exponha `SUPABASE_SERVICE_KEY` no frontend nem em variáveis `VITE_*`.
