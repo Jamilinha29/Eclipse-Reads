@@ -34,8 +34,11 @@ Thumbs.db
 **/.env
 !**/.env.example
 
-# Backends: cópias locais com chaves (o repo pode manter *só* exemplos versionados)
+# Backends — pasta services/backend/envs/: só *.env.example no GitHub
 services/backend/envs/*.env
+services/backend/envs/auth-proxy.env
+services/backend/envs/books-api.env
+services/backend/envs/library-service.env
 !services/backend/envs/*.env.example
 
 # Build / TypeScript
@@ -55,3 +58,6 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Vercel CLI (link local do projeto)
+.vercel/

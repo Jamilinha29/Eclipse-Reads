@@ -24,7 +24,7 @@ services/
 │   ├── auth-proxy/          # Serviço de validação de autenticação
 │   ├── books-api/           # API de gerenciamento de livros
 │   ├── library-service/     # Serviço de biblioteca pessoal
-│   ├── envs/                # Variáveis de ambiente
+│   ├── envs/                # .env local (ignorado no Git) + *.env.example
 │   └── docker-compose.yml   # Orquestração dos serviços
 └── main-service/
     └── supabase/            # Configurações do Supabase
@@ -102,10 +102,7 @@ services/
 
 ### Executar com Docker Compose
 
-1. Configure as variáveis de ambiente em `backend/envs/`:
-   - `auth-proxy.env`
-   - `books-api.env`
-   - `library-service.env`
+1. Copie `backend/envs/*.env.example` para `*.env` e preencha as chaves (ver `backend/envs/README.md`). Os `.env` **não** vão para o GitHub.
 
 2. Inicie todos os serviços:
 
@@ -148,6 +145,8 @@ npm run dev
 ```
 
 ## 🔐 Variáveis de Ambiente
+
+Os serviços carregam `.env` a partir de `services/backend/envs/` usando caminho relativo ao arquivo `src/index.ts` (`../../envs/<serviço>.env`). Isso funciona tanto ao rodar `npm run dev` dentro de cada serviço quanto via Docker, desde que o arquivo exista (copie de `*.env.example`).
 
 ### auth-proxy.env
 
