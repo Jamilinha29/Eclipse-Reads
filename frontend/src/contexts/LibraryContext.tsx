@@ -2,10 +2,34 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 import { useAuth } from "./AuthContext";
 import { api } from "@/lib/api";
 
+function parseGuestList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface LibraryBook {
+  id: string;
+  title: string;
+  author: string;
+  cover_image?: string | null;
+  rating?: number;
+  category?: string;
+}
+
+type LibraryTab = "favoritos" | "lendo" | "lidos";
+
 interface LibraryContextType {
   favorites: string[];
   reading: string[];
   read: string[];
+  libraryBooks: Record<LibraryTab, LibraryBook[]>;
+  libraryLoading: boolean;
+  refreshLibraryBooks: () => Promise<void>;
   addToFavorites: (bookId: string, maxBooks?: number) => Promise<boolean>;
   removeFromFavorites: (bookId: string) => Promise<void>;
   addToReading: (bookId: string, maxBooks?: number) => Promise<boolean>;
@@ -26,19 +50,49 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [reading, setReading] = useState<string[]>([]);
   const [read, setRead] = useState<string[]>([]);
+  const [libraryBooks, setLibraryBooks] = useState<Record<LibraryTab, LibraryBook[]>>({
+    favoritos: [],
+    lendo: [],
+    lidos: [],
+  });
+  const [libraryLoading, setLibraryLoading] = useState(false);
   const { userId, authType, session } = useAuth();
 
-  // Carrega dados do localStorage para convidados ou do Supabase para usuários logados
+  const refreshLibraryBooks = async () => {
+    if (authType === "guest" || !userId) {
+      setLibraryBooks({ favoritos: [], lendo: [], lidos: [] });
+      return;
+    }
+    const token = session?.access_token;
+    if (!token) return;
+
+    setLibraryLoading(true);
+    try {
+      const [favData, readingData, readData] = await Promise.all([
+        api.getLibrary("favoritos", token),
+        api.getLibrary("lendo", token),
+        api.getLibrary("lidos", token),
+      ]);
+
+      setLibraryBooks({
+        favoritos: (favData?.books ?? []) as LibraryBook[],
+        lendo: (readingData?.books ?? []) as LibraryBook[],
+        lidos: (readData?.books ?? []) as LibraryBook[],
+      });
+    } catch (err) {
+      console.error("Erro ao carregar livros da biblioteca:", err);
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
   useEffect(() => {
     const loadLibrary = async () => {
       if (authType === "guest") {
-        const guestFavorites = localStorage.getItem("guest_favorites");
-        const guestReading = localStorage.getItem("guest_reading");
-        const guestRead = localStorage.getItem("guest_read");
-        
-        if (guestFavorites) setFavorites(JSON.parse(guestFavorites) as string[]);
-        if (guestReading) setReading(JSON.parse(guestReading) as string[]);
-        if (guestRead) setRead(JSON.parse(guestRead) as string[]);
+        setFavorites(parseGuestList(localStorage.getItem("guest_favorites")));
+        setReading(parseGuestList(localStorage.getItem("guest_reading")));
+        setRead(parseGuestList(localStorage.getItem("guest_read")));
+        setLibraryBooks({ favoritos: [], lendo: [], lidos: [] });
         return;
       }
 
@@ -54,17 +108,23 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
         ]);
 
         if (favData?.books) {
-          const ids = favData.books.map((d: any) => d.id as string);
+          const ids = favData.books.map((d: LibraryBook) => String(d.id));
           setFavorites(Array.from(new Set(ids)));
         }
         if (readingData?.books) {
-          const ids = readingData.books.map((d: any) => d.id as string);
+          const ids = readingData.books.map((d: LibraryBook) => String(d.id));
           setReading(Array.from(new Set(ids)));
         }
         if (readData?.books) {
-          const ids = readData.books.map((d: any) => d.id as string);
+          const ids = readData.books.map((d: LibraryBook) => String(d.id));
           setRead(Array.from(new Set(ids)));
         }
+
+        setLibraryBooks({
+          favoritos: (favData?.books ?? []) as LibraryBook[],
+          lendo: (readingData?.books ?? []) as LibraryBook[],
+          lidos: (readData?.books ?? []) as LibraryBook[],
+        });
       } catch (err) {
         console.error("Erro ao carregar biblioteca:", err);
       }
@@ -86,73 +146,123 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
   const addToFavorites = async (bookId: string, maxBooks?: number): Promise<boolean> => {
     if (favorites.includes(bookId)) return true;
     if (maxBooks && getTotalBooks() >= maxBooks) return false;
-    
+
+    const prev = favorites;
+    setFavorites((p) => [...p, bookId]);
+
     if (userId && authType !== "guest") {
       const token = session?.access_token;
-      if (token) await api.addToLibrary("favoritos", bookId, token);
+      if (token) {
+        try {
+          await api.addToLibrary("favoritos", bookId, token);
+        } catch {
+          setFavorites(prev);
+          return false;
+        }
+      }
     }
-    
-    setFavorites((prev) => [...prev, bookId]);
     return true;
   };
 
   const removeFromFavorites = async (bookId: string) => {
+    const prev = favorites;
+    setFavorites((p) => p.filter((id) => id !== bookId));
+
     if (userId && authType !== "guest") {
       const token = session?.access_token;
-      if (token) await api.removeFromLibrary("favoritos", bookId, token);
+      if (token) {
+        try {
+          await api.removeFromLibrary("favoritos", bookId, token);
+        } catch {
+          setFavorites(prev);
+        }
+      }
     }
-    setFavorites((prev) => prev.filter((id) => id !== bookId));
   };
 
   const addToReading = async (bookId: string, maxBooks?: number): Promise<boolean> => {
     if (reading.includes(bookId)) return true;
     if (maxBooks && getTotalBooks() >= maxBooks) return false;
-    
-    const token = session?.access_token;
+
+    const prevFav = favorites;
+    const prevReading = reading;
+
     if (!favorites.includes(bookId)) {
-      if (userId && authType !== "guest" && token) {
-        await api.addToLibrary("favoritos", bookId, token);
-      }
-      setFavorites((prev) => [...prev, bookId]);
+      setFavorites((p) => [...p, bookId]);
     }
-    
+    setReading((p) => [...p, bookId]);
+
+    const token = session?.access_token;
     if (userId && authType !== "guest" && token) {
-      await api.addToLibrary("lendo", bookId, token);
+      try {
+        if (!prevFav.includes(bookId)) {
+          await api.addToLibrary("favoritos", bookId, token);
+        }
+        await api.addToLibrary("lendo", bookId, token);
+      } catch {
+        setFavorites(prevFav);
+        setReading(prevReading);
+        return false;
+      }
     }
-    setReading((prev) => [...prev, bookId]);
     return true;
   };
 
   const removeFromReading = async (bookId: string) => {
+    const prev = reading;
+    setReading((p) => p.filter((id) => id !== bookId));
+
     if (userId && authType !== "guest") {
       const token = session?.access_token;
-      if (token) await api.removeFromLibrary("lendo", bookId, token);
+      if (token) {
+        try {
+          await api.removeFromLibrary("lendo", bookId, token);
+        } catch {
+          setReading(prev);
+        }
+      }
     }
-    setReading((prev) => prev.filter((id) => id !== bookId));
   };
 
   const addToRead = async (bookId: string, maxBooks?: number): Promise<boolean> => {
     if (read.includes(bookId)) return true;
     if (maxBooks && getTotalBooks() >= maxBooks) return false;
-    
+
     if (reading.includes(bookId)) {
       await removeFromReading(bookId);
     }
-    
+
+    const prev = read;
+    setRead((p) => [...p, bookId]);
+
     if (userId && authType !== "guest") {
       const token = session?.access_token;
-      if (token) await api.addToLibrary("lidos", bookId, token);
+      if (token) {
+        try {
+          await api.addToLibrary("lidos", bookId, token);
+        } catch {
+          setRead(prev);
+          return false;
+        }
+      }
     }
-    setRead((prev) => [...prev, bookId]);
     return true;
   };
 
   const removeFromRead = async (bookId: string) => {
+    const prev = read;
+    setRead((p) => p.filter((id) => id !== bookId));
+
     if (userId && authType !== "guest") {
       const token = session?.access_token;
-      if (token) await api.removeFromLibrary("lidos", bookId, token);
+      if (token) {
+        try {
+          await api.removeFromLibrary("lidos", bookId, token);
+        } catch {
+          setRead(prev);
+        }
+      }
     }
-    setRead((prev) => prev.filter((id) => id !== bookId));
   };
 
   const isInFavorites = (bookId: string) => favorites.includes(bookId);
@@ -163,27 +273,24 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
     if (isInFavorites(bookId)) {
       await removeFromFavorites(bookId);
       return true;
-    } else {
-      return await addToFavorites(bookId, maxBooks);
     }
+    return addToFavorites(bookId, maxBooks);
   };
 
   const toggleReading = async (bookId: string, maxBooks?: number): Promise<boolean> => {
     if (isInReading(bookId)) {
       await removeFromReading(bookId);
       return true;
-    } else {
-      return await addToReading(bookId, maxBooks);
     }
+    return addToReading(bookId, maxBooks);
   };
 
   const toggleRead = async (bookId: string, maxBooks?: number): Promise<boolean> => {
     if (isInRead(bookId)) {
       await removeFromRead(bookId);
       return true;
-    } else {
-      return await addToRead(bookId, maxBooks);
     }
+    return addToRead(bookId, maxBooks);
   };
 
   return (
@@ -192,6 +299,9 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
         favorites,
         reading,
         read,
+        libraryBooks,
+        libraryLoading,
+        refreshLibraryBooks,
         addToFavorites,
         removeFromFavorites,
         addToReading,

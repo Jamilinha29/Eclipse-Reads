@@ -32,9 +32,9 @@
     "test:load:supabase": "k6 run tests/load/teste-carga-completo.js",
     "test:e2e": "playwright test",
     "test:one-by-one": "node scripts/run-tests-sequential.mjs",
-    "test:docker": "docker-compose -f docker-compose.tests.yml up --build --abort-on-container-exit --exit-code-from tests",
-    "test:docker:one-by-one": "docker-compose -f docker-compose.tests.yml run --rm tests npm run test:one-by-one",
-    "test:docker:down": "docker-compose -f docker-compose.tests.yml down --remove-orphans"
+    "test:docker": "docker compose -f docker-compose.tests.yml up --build --abort-on-container-exit --exit-code-from tests",
+    "test:docker:one-by-one": "docker compose -f docker-compose.tests.yml run --rm tests npm run test:one-by-one",
+    "test:docker:down": "docker compose -f docker-compose.tests.yml down --remove-orphans"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",

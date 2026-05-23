@@ -1,26 +1,50 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-import path from "path";
-
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 import { existsSync } from "fs";
 
-// Carrega as variáveis de ambiente do arquivo auth-proxy.env apenas se existir localmente
-const envPath = path.join(process.cwd(), '../envs/auth-proxy.env');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const envPath = resolve(__dirname, "../../envs/auth-proxy.env");
 if (existsSync(envPath)) {
-  dotenv.config({ path: envPath });
+  config({ path: envPath });
 }
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://eclipse-reads.vercel.app",
+];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Bloqueado pela política de CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
-  console.log(`[Vercel Proxy] Auth Proxy Hit: ${req.url}`);
+  if (NODE_ENV !== "production") {
+    console.log(`[Vercel Proxy] Auth Proxy Hit: ${req.url}`);
+  }
   if (req.url.startsWith('/api/auth')) {
     req.url = req.url.slice('/api/auth'.length);
   }

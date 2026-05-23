@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface Book {
   id: string;
@@ -24,13 +24,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { userId, token } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [newBooks, setNewBooks] = useState<Book[]>([]);
-  const { toast } = useToast();
 
   const checkNewBooks = useCallback(async () => {
     if (!userId) return;
 
     try {
-      // Carregar configurações do usuário para ver se notificações estão ativas
       const { settings } = await api.getMeSettings(token || "");
       if (!settings?.new_books_notifications) {
         setUnreadCount(0);
@@ -41,8 +39,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const response = await api.getBooks();
       if (response?.books) {
         const books = response.books as Book[];
-        
-        // Obter o timestamp da última verificação do localStorage
+
         const lastCheck = localStorage.getItem(`last_book_check_${userId}`);
         const lastCheckDate = lastCheck ? new Date(lastCheck) : new Date(0);
 
@@ -54,11 +51,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setNewBooks(newerBooks);
         setUnreadCount(newerBooks.length);
 
-        // Se houver novos livros e for a primeira vez na sessão, mostra um toast
         const sessionNotified = sessionStorage.getItem(`notified_session_${userId}`);
         if (newerBooks.length > 0 && !sessionNotified) {
-          toast({
-            title: "Novos livros disponíveis!",
+          toast.info("Novos livros disponíveis!", {
             description: `Você tem ${newerBooks.length} novas atualizações para conferir.`,
           });
           sessionStorage.setItem(`notified_session_${userId}`, 'true');
@@ -67,7 +62,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error("Erro ao verificar novos livros:", error);
     }
-  }, [userId, token, toast]);
+  }, [userId, token]);
 
   const resetCount = () => {
     if (!userId) return;
@@ -79,8 +74,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (userId) {
       checkNewBooks();
-      
-      // Verificar periodicamente a cada 5 minutos
+
       const interval = setInterval(checkNewBooks, 5 * 60 * 1000);
       return () => clearInterval(interval);
     } else {

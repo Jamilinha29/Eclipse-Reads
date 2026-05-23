@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Upload, ArrowLeft, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { validateBookFileContent } from "@/lib/bookFileValidation";
 
 const SubmitBook = () => {
   const [title, setTitle] = useState("");
@@ -19,7 +20,14 @@ const SubmitBook = () => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { userId, token } = useAuth();
+  const { userId, token, authType } = useAuth();
+
+  useEffect(() => {
+    if (authType === "guest" || !userId) {
+      toast.error("Faça login para enviar um livro");
+      navigate("/auth");
+    }
+  }, [authType, userId, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -48,6 +56,12 @@ const SubmitBook = () => {
 
     if (!title || !author || !description || !category || !file || !userId || !token) {
       toast.error("Preencha todos os campos e selecione um arquivo");
+      return;
+    }
+
+    const contentOk = await validateBookFileContent(file);
+    if (!contentOk) {
+      toast.error("O conteúdo do arquivo não corresponde a um PDF, EPUB ou MOBI válido");
       return;
     }
 

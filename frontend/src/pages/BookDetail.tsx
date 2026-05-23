@@ -88,11 +88,13 @@ const BookDetail = () => {
     }
   };
 
-  const handleToggleReading = async () => {
+  const handleToggleReading = async (): Promise<boolean> => {
     const success = await toggleReading(id!, bookLimit);
     if (!success) {
       toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
+      return false;
     }
+    return true;
   };
 
   const handleToggleRead = async () => {
@@ -159,9 +161,9 @@ const BookDetail = () => {
               <Button
                 className="flex-1 min-w-[140px] gap-2"
                 size="lg"
-                onClick={() => {
-                  handleToggleReading();
-                  navigate(`/read/${id}`);
+                onClick={async () => {
+                  const ok = await handleToggleReading();
+                  if (ok) navigate(`/read/${id}`);
                 }}
                 variant={isInReading(id!) ? "secondary" : "default"}
               >

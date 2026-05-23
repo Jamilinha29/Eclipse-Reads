@@ -105,13 +105,10 @@ const AdminPanel = () => {
     setStorageLoading(true);
     try {
       const { files } = await api.adminListBooksStorage(token);
-      const validFiles = (files || []).filter(
-        (file: StorageFile) =>
-          file.name.endsWith(".pdf") || file.name.endsWith(".epub") || file.name.endsWith(".mobi")
-      );
-      setStorageFiles(validFiles);
+      setStorageFiles(files || []);
     } catch (e) {
-      toast.error("Erro ao carregar arquivos do storage");
+      const msg = e instanceof Error ? e.message : "Erro ao carregar arquivos do storage";
+      toast.error(msg);
       console.error(e);
     } finally {
       setStorageLoading(false);
@@ -309,7 +306,8 @@ const AdminPanel = () => {
       await loadExistingBooks();
       setProcessedFiles((prev) => new Set(prev).add(file.name));
     } catch (e) {
-      toast.error(existingBook ? "Erro ao atualizar livro" : "Erro ao adicionar livro");
+      const msg = e instanceof Error ? e.message : existingBook ? "Erro ao atualizar livro" : "Erro ao adicionar livro";
+      toast.error(msg);
       console.error(e);
     } finally {
       setActionLoading(false);
@@ -483,7 +481,13 @@ const AdminPanel = () => {
                     </div>
                     <h3 className="text-xl font-bold">Nenhum arquivo encontrado</h3>
                     <p className="text-muted-foreground">
-                      Não há arquivos PDF, EPUB ou MOBI no bucket de storage
+                      Não há arquivos PDF, EPUB ou MOBI na pasta <strong>livros/</strong> do bucket books.
+                      Faça upload em Storage → books → livros.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Nomes de arquivo: use só letras sem acento, números, hífen e ponto
+                      (ex.: <code className="text-xs">Senhora-Jose-de-Alencar.pdf</code> — não use{" "}
+                      <code className="text-xs">José</code> ou espaços).
                     </p>
                   </div>
                 </Card>

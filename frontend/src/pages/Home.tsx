@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Quote {
   id: string;
@@ -27,25 +28,35 @@ const Home = () => {
   const { isLoggedIn, authType, username, theme } = useAuth();
   const [dailyQuote, setDailyQuote] = useState<Quote | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadQuotes = async () => {
-      const response = await api.getQuoteOfDay({ rotate: true });
-      setDailyQuote(response?.quote ?? null);
+      try {
+        const response = await api.getQuoteOfDay({ rotate: true });
+        setDailyQuote(response?.quote ?? null);
+      } catch {
+        /* citação é opcional na home */
+      }
     };
 
     const loadBooks = async () => {
-      const response = await api.getBooks();
-      if (response?.books) {
-        // Filtrar duplicados por título e autor (mantendo o primeiro encontrado, que é o mais recente)
-        const seen = new Set();
-        const unique = response.books.filter((b: any) => {
-          const key = `${b.title.toLowerCase()}-${b.author.toLowerCase()}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setBooks(unique.slice(0, 12));
+      try {
+        setLoadError(null);
+        const response = await api.getBooks();
+        if (response?.books) {
+          const seen = new Set();
+          const unique = response.books.filter((b: Book) => {
+            const key = `${b.title.toLowerCase()}-${b.author.toLowerCase()}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setBooks(unique.slice(0, 12));
+        }
+      } catch {
+        setLoadError("Não foi possível carregar os livros. Verifique se os serviços backend estão no ar.");
+        toast.error("Erro ao carregar catálogo");
       }
     };
 
@@ -129,7 +140,9 @@ const Home = () => {
             </Button>
           </Link>
         </div>
-        {books.length === 0 ? (
+        {loadError ? (
+          <div className="text-center py-12 text-destructive">{loadError}</div>
+        ) : books.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             Nenhum livro disponível ainda
           </div>
@@ -162,7 +175,9 @@ const Home = () => {
             </Button>
           </Link>
         </div>
-        {books.length === 0 ? (
+        {loadError ? (
+          <div className="text-center py-12 text-destructive">{loadError}</div>
+        ) : books.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             Nenhum livro disponível ainda
           </div>

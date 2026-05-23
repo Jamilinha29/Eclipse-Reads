@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
+
+const PAGE_SIZE = 24;
 
 interface Book {
   id: string;
@@ -37,6 +40,8 @@ const Search = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("Todos os Gêneros");
   const [books, setBooks] = useState<Book[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const genres = [
     "Todos os Gêneros",
@@ -62,22 +67,31 @@ const Search = () => {
 
   useEffect(() => {
     const loadBooks = async () => {
-      const response = await api.getBooks();
-      if (response?.books) {
-        // Filtrar duplicados por título e autor (mantendo o primeiro encontrado, que é o mais recente)
-        const seen = new Set();
-        const unique = response.books.filter((b: any) => {
-          const key = `${b.title.toLowerCase() || 'unnamed'}-${b.author.toLowerCase() || 'unknown'}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setBooks(unique);
+      try {
+        setLoadError(null);
+        const response = await api.getBooks();
+        if (response?.books) {
+          const seen = new Set();
+          const unique = response.books.filter((b: Book) => {
+            const key = `${b.title.toLowerCase() || 'unnamed'}-${b.author.toLowerCase() || 'unknown'}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setBooks(unique);
+        }
+      } catch {
+        setLoadError("Não foi possível carregar os livros.");
+        toast.error("Erro ao carregar catálogo");
       }
     };
 
     loadBooks();
   }, []);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, selectedGenre]);
 
   const filteredBooks = books.filter((book) => {
     const matchesSearch =
@@ -92,6 +106,9 @@ const Search = () => {
     
     return matchesSearch && matchesGenre;
   });
+
+  const visibleBooks = filteredBooks.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredBooks.length;
 
   return (
     <div className="min-h-screen pb-8">
@@ -146,12 +163,14 @@ const Search = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {filteredBooks.length === 0 ? (
+          {loadError ? (
+            <div className="col-span-full text-center py-12 text-destructive">{loadError}</div>
+          ) : filteredBooks.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
               Nenhum livro encontrado
             </div>
           ) : (
-            filteredBooks.map((book) => (
+            visibleBooks.map((book) => (
               <BookCard 
                 key={`new-${book.id}`} 
                 id={book.id}
@@ -164,12 +183,13 @@ const Search = () => {
           )}
         </div>
         
-        {filteredBooks.length > 0 && (
+        {filteredBooks.length > 0 && hasMore && (
           <div className="flex justify-center mt-8">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="lg"
               className="gap-2 px-8"
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
             >
               MAIS LIVROS RECENTES
               <ArrowRight className="h-4 w-4" />

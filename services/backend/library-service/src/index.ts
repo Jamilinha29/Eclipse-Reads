@@ -1,17 +1,18 @@
 import express, { Request, Response, type RequestHandler } from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-import path from "path";
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
+import { existsSync } from "fs";
 import multer from "multer";
 import { Readable } from "stream";
 
-import { existsSync } from "fs";
-
-// Carrega as variáveis de ambiente do arquivo library-service.env apenas se existir localmente
-const envPath = path.join(process.cwd(), '../envs/library-service.env');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const envPath = resolve(__dirname, "../../envs/library-service.env");
 if (existsSync(envPath)) {
-  dotenv.config({ path: envPath });
+  config({ path: envPath });
 }
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
@@ -51,7 +52,9 @@ app.use((_req: Request, res: Response, next) => {
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
-  console.log(`[Vercel Proxy] Library Service Hit: ${req.url}`);
+  if (NODE_ENV !== "production") {
+    console.log(`[Vercel Proxy] Library Service Hit: ${req.url}`);
+  }
   if (req.url.startsWith('/api/library')) {
     req.url = req.url.slice('/api/library'.length);
   }
@@ -180,7 +183,10 @@ app.get("/library", async (req: Request, res: Response) => {
     if (ids.length === 0) return res.json({ books: [] });
 
     // buscar livros por ids
-    const { data: books, error: booksError } = await svc.from("books").select("*").in("id", ids);
+    const { data: books, error: booksError } = await svc
+      .from("books")
+      .select("id, title, author, category, cover_image, rating, age_rating, created_at, file_path")
+      .in("id", ids);
     if (booksError) {
       console.error("❌ Database error /library books:", booksError);
       const msg = process.env.NODE_ENV === "test" ? booksError.message : "Erro ao carregar livros.";
@@ -349,6 +355,15 @@ app.get("/me/profile", async (req: Request, res: Response) => {
   }
 });
 
+function isAllowedProfileMediaUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("data:image/")) return true;
+  if (trimmed.includes("/images/avatars/")) return true;
+  if (trimmed.includes("supabase.co/storage/") && trimmed.includes("/avatars/")) return true;
+  return false;
+}
+
 // PUT /me/profile -> { username?, avatar_image?, banner_image? }
 app.put("/me/profile", async (req: Request, res: Response) => {
   try {
@@ -371,8 +386,18 @@ app.put("/me/profile", async (req: Request, res: Response) => {
       }
       payload.username = username;
     }
-    if (avatar_image !== undefined) payload.avatar_image = avatar_image;
-    if (banner_image !== undefined) payload.banner_image = banner_image;
+    if (avatar_image !== undefined) {
+      if (!isAllowedProfileMediaUrl(avatar_image)) {
+        return res.status(400).json({ error: "URL de avatar inválida. Use upload pelo app ou storage autorizado." });
+      }
+      payload.avatar_image = avatar_image;
+    }
+    if (banner_image !== undefined) {
+      if (!isAllowedProfileMediaUrl(banner_image)) {
+        return res.status(400).json({ error: "URL de banner inválida. Use upload pelo app ou storage autorizado." });
+      }
+      payload.banner_image = banner_image;
+    }
 
     const { data, error } = await svc
       .from("profiles")
@@ -681,9 +706,16 @@ app.put("/reading-progress/:bookId", async (req: Request, res: Response) => {
     const bookId = req.params.bookId;
     const svc = svcClient();
 
-    const current_page = Number(req.body?.current_page ?? 1);
-    const total_pages = Number(req.body?.total_pages ?? 1);
-    const progress_percentage = Number(req.body?.progress_percentage ?? 0);
+    const rawCurrent = Number(req.body?.current_page ?? 1);
+    const rawTotal = Number(req.body?.total_pages ?? 1);
+    const rawPct = Number(req.body?.progress_percentage ?? 0);
+
+    const total_pages = Math.max(1, Math.min(10000, Number.isFinite(rawTotal) ? rawTotal : 1));
+    const current_page = Math.max(1, Math.min(total_pages, Number.isFinite(rawCurrent) ? rawCurrent : 1));
+    const progress_percentage = Math.max(
+      0,
+      Math.min(100, Number.isFinite(rawPct) ? rawPct : (current_page / total_pages) * 100)
+    );
 
     const { data, error } = await svc
       .from("reading_progress")
@@ -774,15 +806,54 @@ app.post("/me/achievements/:id/toggle", async (req: Request, res: Response) => {
       .maybeSingle();
 
     if (existing) {
-      await svc.from("user_achievements").delete().eq("user_id", user.id).eq("achievement_id", achievementId);
+      const { error: delErr } = await svc
+        .from("user_achievements")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("achievement_id", achievementId);
+      if (delErr) {
+        console.error("❌ Database error /me/achievements toggle delete:", delErr);
+        return res.status(500).json({ error: "Erro ao remover conquista." });
+      }
       return res.json({ achieved: false });
-    } else {
-      await svc.from("user_achievements").insert({ user_id: user.id, achievement_id: achievementId });
-      return res.json({ achieved: true });
     }
+
+    const { error: insErr } = await svc
+      .from("user_achievements")
+      .insert({ user_id: user.id, achievement_id: achievementId });
+    if (insErr) {
+      console.error("❌ Database error /me/achievements toggle insert:", insErr);
+      return res.status(500).json({ error: "Erro ao registrar conquista." });
+    }
+    return res.json({ achieved: true });
   } catch (err: any) {
     console.error("❌ Unexpected error /me/achievements/toggle:", err);
     return res.status(500).json({ error: "Erro ao atualizar conquista." });
+  }
+});
+
+app.get("/me/achievements", async (req: Request, res: Response) => {
+  try {
+    const authHeader = requireAuthHeader(req);
+    const user = await getUserFromAuthHeader(authHeader);
+    const svc = svcClient();
+
+    const { data, error } = await svc
+      .from("user_achievements")
+      .select("achievement_id")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("❌ Database error /me/achievements GET:", error);
+      return res.status(500).json({ error: "Erro ao buscar conquistas do usuário." });
+    }
+
+    const achievementIds = (data ?? []).map((row: { achievement_id: string }) => row.achievement_id);
+    return res.json({ achievementIds });
+  } catch (err: any) {
+    console.error("❌ Unexpected error /me/achievements GET:", err);
+    const status = err?.statusCode ? Number(err.statusCode) : 500;
+    return res.status(status).json({ error: "Erro ao listar conquistas." });
   }
 });
 

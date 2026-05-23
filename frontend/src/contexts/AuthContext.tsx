@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   GUEST_AUTH_FLAG_KEY,
@@ -68,6 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [profileReady, setProfileReady] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => getStoredTheme() ?? "dark");
+  const skipProfileSaveRef = useRef(true);
 
   const isLoggedIn = authType !== null;
   const bookLimit = authType === "guest" ? 7 : Infinity;
@@ -107,6 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuthType(authTypeFromUser(currentSession.user));
         setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
         setProfileReady(false);
+        skipProfileSaveRef.current = true;
 
         const token = currentSession.access_token;
         loadProfile(currentSession.user.id, currentSession.user, token)
@@ -138,12 +140,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserId(currentSession.user.id);
         setAuthType(authTypeFromUser(currentSession.user));
         setUsername(prev => (prev === "Usuário" || !prev) ? getDisplayNameFromUser(currentSession.user) : prev);
-        setProfileReady(false);
-
-        const token = currentSession.access_token;
-        loadProfile(currentSession.user.id, currentSession.user, token)
-          .catch((e) => console.error("loadProfile:", e))
-          .finally(() => setProfileReady(true));
       } else if (localStorage.getItem(GUEST_AUTH_FLAG_KEY) === "guest") {
         setUserId(null);
         setAuthType("guest");
@@ -189,13 +185,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!userId || authType === "guest" || loading || !profileReady || !session?.access_token) return;
+    if (skipProfileSaveRef.current) {
+      skipProfileSaveRef.current = false;
+      return;
+    }
 
     const timeoutId = setTimeout(() => {
       saveProfile();
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [userId, authType, loading, profileReady, session?.access_token, saveProfile]);
+  }, [username, avatarImage, bannerImage, userId, authType, loading, profileReady, session?.access_token, saveProfile]);
 
   const logout = async () => {
     await supabase.auth.signOut();

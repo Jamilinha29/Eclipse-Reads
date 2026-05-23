@@ -1,38 +1,76 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Heart, Eye, Check, BookOpen, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useLibrary } from "@/contexts/LibraryContext";
+import { useLibrary, type LibraryBook } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import BookCard from "@/components/BookCard";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
 
+const PLACEHOLDER_COVER =
+  "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop";
+
 const Library = () => {
   const [activeTab, setActiveTab] = useState<"favoritos" | "lendo" | "lidos">("favoritos");
-  const { favorites, reading, read } = useLibrary();
+  const { favorites, reading, read, libraryBooks, libraryLoading } = useLibrary();
   const { authType, bookLimit } = useAuth();
-  const [books, setBooks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [guestCatalog, setGuestCatalog] = useState<LibraryBook[]>([]);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   const isGuest = authType === "guest";
-  const hasReachedLimit = isGuest && (favorites.length + reading.length + read.length) >= bookLimit;
+  const hasReachedLimit = isGuest && favorites.length + reading.length + read.length >= bookLimit;
+
+  const activeIds = useMemo(() => {
+    if (activeTab === "favoritos") return favorites;
+    if (activeTab === "lendo") return reading;
+    return read;
+  }, [activeTab, favorites, reading, read]);
 
   useEffect(() => {
-    const loadBooks = async () => {
-      setLoading(true);
+    if (!isGuest) return;
+
+    const loadGuestCatalog = async () => {
+      setGuestLoading(true);
       try {
         const response = await api.getBooks();
-        if (response?.books) setBooks(response.books);
+        if (response?.books) setGuestCatalog(response.books as LibraryBook[]);
       } catch {
-        // mantém fallback silencioso para não quebrar interface
+        setGuestCatalog([]);
+      } finally {
+        setGuestLoading(false);
       }
-      setLoading(false);
     };
 
-    loadBooks();
-  }, []);
+    loadGuestCatalog();
+  }, [isGuest]);
+
+  const displayBooks = isGuest
+    ? guestCatalog.filter((book) => activeIds.includes(String(book.id)))
+    : libraryBooks[activeTab];
+
+  const loading = isGuest ? guestLoading : libraryLoading;
+
+  const emptyMessages = {
+    favoritos: {
+      title: "Nenhum favorito ainda",
+      description: "Explore nosso catálogo e adicione livros aos seus favoritos.",
+      showSearch: true,
+    },
+    lendo: {
+      title: "Nenhum livro em leitura",
+      description: "Comece a ler e adicione livros aqui.",
+      showSearch: false,
+    },
+    lidos: {
+      title: "Nenhum livro lido",
+      description: "Termine uma leitura e marque aqui.",
+      showSearch: false,
+    },
+  };
+
+  const empty = emptyMessages[activeTab];
 
   return (
     <div className="min-h-screen pb-8">
@@ -44,8 +82,11 @@ const Library = () => {
             <AlertCircle className="h-4 w-4 text-accent" />
             <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
               <span className="text-sm">
-                Modo Convidado: Você pode adicionar até {bookLimit} livros no total. {" "}
-                <strong>{favorites.length + reading.length + read.length}/{bookLimit}</strong> usados.
+                Modo Convidado: Você pode adicionar até {bookLimit} livros no total.{" "}
+                <strong>
+                  {favorites.length + reading.length + read.length}/{bookLimit}
+                </strong>{" "}
+                usados.
               </span>
               <Link to="/auth">
                 <Button size="sm" variant="default">
@@ -53,6 +94,12 @@ const Library = () => {
                 </Button>
               </Link>
             </AlertDescription>
+          </Alert>
+        )}
+
+        {hasReachedLimit && (
+          <Alert className="mb-6 border-destructive/50">
+            <AlertDescription>Limite de livros atingido no modo convidado.</AlertDescription>
           </Alert>
         )}
 
@@ -83,115 +130,41 @@ const Library = () => {
           </Button>
         </div>
 
-        {activeTab === "favoritos" && (
-          <>
-            {favorites.length === 0 ? (
-              <Card className="p-12 text-center border-dashed">
-                <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
-                  <div className="rounded-full bg-secondary p-6">
-                    <Heart className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h2 className="text-2xl font-bold">Nenhum favorito ainda</h2>
-                  <p className="text-muted-foreground">
-                    Explore nosso catálogo e adicione livros aos seus favoritos.
-                  </p>
-                  <Link to="/search">
-                    <Button className="gap-2 mt-2">
-                      <BookOpen className="h-4 w-4" />
-                      Buscar livros
-                    </Button>
-                  </Link>
-                </div>
-              </Card>
-            ) : loading ? (
-              <div className="text-center py-12">Carregando...</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {books
-                  .filter((book) => favorites.includes(String(book.id)))
-                  .map((book) => (
-                    <BookCard 
-                      key={book.id} 
-                      id={book.id}
-                      title={book.title}
-                      author={book.author}
-                      image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
-                      rating={book.rating}
-                    />
-                  ))}
+        {activeIds.length === 0 ? (
+          <Card className="p-12 text-center border-dashed">
+            <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+              <div className="rounded-full bg-secondary p-6">
+                {activeTab === "favoritos" && <Heart className="h-12 w-12 text-muted-foreground" />}
+                {activeTab === "lendo" && <Eye className="h-12 w-12 text-muted-foreground" />}
+                {activeTab === "lidos" && <Check className="h-12 w-12 text-muted-foreground" />}
               </div>
-            )}
-          </>
-        )}
-
-        {activeTab === "lendo" && (
-          <>
-            {reading.length === 0 ? (
-              <Card className="p-12 text-center border-dashed">
-                <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
-                  <div className="rounded-full bg-secondary p-6">
-                    <Eye className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h2 className="text-2xl font-bold">Nenhum livro em leitura</h2>
-                  <p className="text-muted-foreground">
-                    Comece a ler e adicione livros aqui.
-                  </p>
-                </div>
-              </Card>
-            ) : loading ? (
-              <div className="text-center py-12">Carregando...</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {books
-                  .filter((book) => reading.includes(String(book.id)))
-                  .map((book) => (
-                    <BookCard 
-                      key={book.id} 
-                      id={book.id}
-                      title={book.title}
-                      author={book.author}
-                      image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
-                      rating={book.rating}
-                    />
-                  ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === "lidos" && (
-          <>
-            {read.length === 0 ? (
-              <Card className="p-12 text-center border-dashed">
-                <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
-                  <div className="rounded-full bg-secondary p-6">
-                    <Check className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h2 className="text-2xl font-bold">Nenhum livro lido</h2>
-                  <p className="text-muted-foreground">
-                    Termine uma leitura e marque aqui.
-                  </p>
-                </div>
-              </Card>
-            ) : loading ? (
-              <div className="text-center py-12">Carregando...</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {books
-                  .filter((book) => read.includes(String(book.id)))
-                  .map((book) => (
-                    <BookCard 
-                      key={book.id} 
-                      id={book.id}
-                      title={book.title}
-                      author={book.author}
-                      image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
-                      rating={book.rating}
-                    />
-                  ))}
-              </div>
-            )}
-          </>
+              <h2 className="text-2xl font-bold">{empty.title}</h2>
+              <p className="text-muted-foreground">{empty.description}</p>
+              {empty.showSearch && (
+                <Link to="/search">
+                  <Button className="gap-2 mt-2">
+                    <BookOpen className="h-4 w-4" />
+                    Buscar livros
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </Card>
+        ) : loading ? (
+          <div className="text-center py-12">Carregando...</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {displayBooks.map((book) => (
+              <BookCard
+                key={book.id}
+                id={book.id}
+                title={book.title}
+                author={book.author}
+                image={book.cover_image || PLACEHOLDER_COVER}
+                rating={book.rating ?? 0}
+              />
+            ))}
+          </div>
         )}
       </section>
     </div>

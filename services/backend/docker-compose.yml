@@ -9,7 +9,7 @@ services:
     ports:
       - "4000:4000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -22,7 +22,7 @@ services:
     ports:
       - "4100:4100"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4100/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4100/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -35,7 +35,7 @@ services:
     ports:
       - "4200:4200"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4200/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3

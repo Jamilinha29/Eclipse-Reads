@@ -17,6 +17,7 @@ import morgan from "morgan";
 import { createClient } from "@supabase/supabase-js";
 import { Readable } from "stream";
 import multer from "multer";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const app = express();
 app.disable("x-powered-by");
@@ -56,7 +57,9 @@ app.use((_req: Request, res: Response, next) => {
 
 // Middleware para lidar com o prefixo da Vercel
 app.use((req, res, next) => {
-  console.log(`[Vercel Proxy] Books API Hit: ${req.url}`);
+  if (NODE_ENV !== "production") {
+    console.log(`[Vercel Proxy] Books API Hit: ${req.url}`);
+  }
   if (req.url.startsWith('/api/books')) {
     req.url = req.url.slice('/api/books'.length);
   }
@@ -85,6 +88,121 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 const BOOKS_SUBMISSION_MAX_BYTES = parsePositiveIntEnv("BOOKS_SUBMISSION_MAX_BYTES", 50 * 1024 * 1024);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+const FILE_ACCESS_SECRET = process.env.FILE_ACCESS_SECRET ?? SUPABASE_SERVICE_KEY.slice(0, 32);
+const FILE_ACCESS_TTL_SEC = 3600;
+/** PDF/EPUB/MOBI ficam em `livros/`; capas continuam em `covers/`. */
+const BOOKS_FILES_DIR = "livros";
+const BOOK_FILE_EXTENSIONS = new Set(["pdf", "epub", "mobi"]);
+
+function isBookFileName(name: string): boolean {
+  const base = name.split("/").pop() ?? name;
+  const dot = base.lastIndexOf(".");
+  if (dot < 0) return false;
+  return BOOK_FILE_EXTENSIONS.has(base.slice(dot + 1).toLowerCase());
+}
+
+function bookContentTypeForExt(ext: string, fallback?: string): string {
+  switch (ext.toLowerCase()) {
+    case "pdf":
+      return "application/pdf";
+    case "epub":
+      return "application/epub+zip";
+    case "mobi":
+      return "application/x-mobipocket-ebook";
+    default:
+      return fallback || "application/octet-stream";
+  }
+}
+
+function isStoragePathMissingError(message: string | undefined): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("not found") || m.includes("does not exist") || m.includes("nosuchkey");
+}
+
+/** Supabase Storage só aceita ASCII seguro — sem acentos (é, ã, ç). */
+function sanitizeStorageFileName(name: string): string {
+  const trimmed = name.trim().replace(/\\/g, "/");
+  const slash = trimmed.lastIndexOf("/");
+  const fileName = slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
+  const dot = fileName.lastIndexOf(".");
+  const ext = dot >= 0 ? fileName.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const baseRaw = dot >= 0 ? fileName.slice(0, dot) : fileName;
+  const base = baseRaw
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "") || "arquivo";
+  return ext ? `${base}.${ext}` : base;
+}
+
+async function assertBookFileInStorage(filePath: string): Promise<string | null> {
+  const { error } = await supabase.storage.from("books").download(filePath);
+  if (!error) return null;
+  if (isStoragePathMissingError(error.message)) {
+    return `Arquivo não encontrado no Storage (${filePath}). Envie o ficheiro para books/livros/ antes de importar.`;
+  }
+  return error.message;
+}
+
+async function listLivrosBookFiles(): Promise<{ name: string; id: string; metadata: Record<string, unknown> | null }[]> {
+  const { data, error } = await supabase.storage.from("books").list(BOOKS_FILES_DIR, {
+    limit: 2000,
+    sortBy: { column: "name", order: "asc" },
+  });
+  if (error) {
+    if (isStoragePathMissingError(error.message)) return [];
+    throw error;
+  }
+  return (data ?? [])
+    .filter((f) => f.name && isBookFileName(f.name))
+    .map((f) => ({
+      ...f,
+      name: `${BOOKS_FILES_DIR}/${f.name}`,
+      metadata: (f.metadata as Record<string, unknown> | undefined) ?? null,
+    }));
+}
+
+function sanitizeStoragePath(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\\/g, "/");
+  if (!trimmed || trimmed.includes("..") || trimmed.startsWith("/")) return null;
+  const segments = trimmed.split("/").filter(Boolean);
+  if (segments.some((s) => s === "." || s === "..")) return null;
+  return segments.join("/");
+}
+
+/** Normaliza caminho de arquivo de livro para `livros/...` (ignora capas). */
+function normalizeBookFilePath(raw: string): string | null {
+  const path = sanitizeStoragePath(raw);
+  if (!path || path.startsWith("covers/")) return null;
+  if (path.startsWith(`${BOOKS_FILES_DIR}/`)) return path;
+  return `${BOOKS_FILES_DIR}/${path}`;
+}
+
+function signFileAccessToken(bookId: string): string {
+  const exp = Math.floor(Date.now() / 1000) + FILE_ACCESS_TTL_SEC;
+  const payload = `${bookId}:${exp}`;
+  const sig = createHmac("sha256", FILE_ACCESS_SECRET).update(payload).digest("base64url");
+  return `${exp}.${sig}`;
+}
+
+function verifyFileAccessToken(bookId: string, token: string): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const exp = Number(parts[0]);
+  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
+  const expected = createHmac("sha256", FILE_ACCESS_SECRET).update(`${bookId}:${exp}`).digest("base64url");
+  try {
+    const a = Buffer.from(parts[1]);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: BOOKS_SUBMISSION_MAX_BYTES },
@@ -118,6 +236,22 @@ const uploadCover = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
 });
+
+function validateBookFileBuffer(buffer: Buffer, ext: string): boolean {
+  if (!buffer?.length) return false;
+  if (ext === "pdf") {
+    return buffer.slice(0, 5).toString("ascii") === "%PDF-";
+  }
+  if (ext === "epub") {
+    return buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+  }
+  if (ext === "mobi") {
+    const bookHead = buffer.slice(0, 4).toString("ascii");
+    const mobiHead = buffer.slice(60, 64).toString("ascii");
+    return bookHead === "BOOK" || mobiHead.includes("MOBI");
+  }
+  return false;
+}
 
 async function requireUser(req: Request): Promise<{ id: string; email?: string | null }> {
   const auth = req.header("authorization") ?? "";
@@ -181,7 +315,15 @@ app.get("/health", (_req: Request, res: Response) => {
   return res.json({ status: "ok", uptime_ms: Date.now() - startTime });
 });
 
-app.get("/metrics", (_req: Request, res: Response) => {
+app.get("/metrics", async (req: Request, res: Response) => {
+  if (NODE_ENV === "production") {
+    try {
+      await requireAdmin(req);
+    } catch (err: any) {
+      const status = err?.statusCode ? Number(err.statusCode) : 401;
+      return res.status(status).json({ error: "Unauthorized" });
+    }
+  }
   return res.json({ requests });
 });
 
@@ -224,13 +366,18 @@ app.get("/books/:id", async (req: Request, res: Response) => {
     const id = req.params.id;
     const { data, error } = await supabase
       .from("books")
-      .select("id, title, author, description, category, cover_image, rating, file_type, created_at, age_rating")
+      .select("id, title, author, description, category, cover_image, rating, file_type, file_path, created_at, age_rating")
       .eq("id", id)
       .maybeSingle();
     if (error) {
       console.error("❌ Database error /books/:id:", error);
       const msg = process.env.NODE_ENV === "test" ? error.message : "Erro ao buscar detalhes do livro.";
       return res.status(500).json({ error: msg });
+    }
+
+    const filePath = typeof data?.file_path === "string" ? data.file_path.trim() : "";
+    if (!data || !filePath) {
+      return res.status(404).json({ error: "Livro não encontrado." });
     }
     
     if (data) {
@@ -245,12 +392,39 @@ app.get("/books/:id", async (req: Request, res: Response) => {
   }
 });
 
-// GET /books/:id/file -> faz proxy do arquivo do livro pelo backend
+// GET /books/:id/file-access -> token assinado para iframe/PDF (sem Header Authorization)
+app.get("/books/:id/file-access", async (req: Request, res: Response) => {
+  requests++;
+  try {
+    const id = req.params.id;
+    const { data: book, error: bookError } = await supabase
+      .from("books")
+      .select("id, file_path")
+      .eq("id", id)
+      .maybeSingle();
+    if (bookError) return res.status(500).json({ error: "Erro ao localizar livro." });
+    if (!book?.file_path) return res.status(404).json({ error: "Livro não encontrado." });
+
+    const access = signFileAccessToken(id);
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.get("host");
+    const url = `${protocol}://${host}/books/${id}/file?access=${encodeURIComponent(access)}`;
+    return res.json({ url, access, expiresIn: FILE_ACCESS_TTL_SEC });
+  } catch (err: any) {
+    console.error("❌ Unexpected error /books/:id/file-access:", err);
+    return res.status(500).json({ error: "Erro ao gerar acesso ao arquivo." });
+  }
+});
+
+// GET /books/:id/file -> proxy do arquivo (exige token ?access= assinado)
 app.get("/books/:id/file", async (req: Request, res: Response) => {
   requests++;
   try {
-    // Endpoint liberado: iframes e bibliotecas de PDF/Epub do frontend não enviam Header Authorization.
     const id = req.params.id;
+    const accessToken = String(req.query.access ?? "");
+    if (!accessToken || !verifyFileAccessToken(id, accessToken)) {
+      return res.status(401).json({ error: "Acesso ao arquivo negado ou token expirado." });
+    }
     const { data: book, error: bookError } = await supabase
       .from("books")
       .select("file_path, file_type, title")
@@ -263,9 +437,10 @@ app.get("/books/:id/file", async (req: Request, res: Response) => {
     }
     if (!book?.file_path) return res.status(404).json({ error: "Arquivo não encontrado." });
 
+    const storagePath = normalizeBookFilePath(book.file_path) ?? book.file_path;
     const { data: fileData, error: fileError } = await supabase.storage
       .from("books")
-      .download(book.file_path);
+      .download(storagePath);
 
     if (fileError) {
       console.error("❌ Storage error /books/:id/file:", fileError);
@@ -320,18 +495,28 @@ app.post("/submissions", upload.single("file") as unknown as RequestHandler, asy
     const ext = originalName.includes(".") ? originalName.split(".").pop()!.toLowerCase() : "";
     const allowedExt = new Set(["pdf", "epub", "mobi"]);
     if (!allowedExt.has(ext)) return res.status(400).json({ error: "Invalid file type" });
+    if (!validateBookFileBuffer(file.buffer, ext)) {
+      return res.status(400).json({ error: "File content does not match the declared type" });
+    }
 
-    const filePath = `${user.id}/${Date.now()}_${originalName}`.replace(/\s+/g, "_");
+    const safeName = sanitizeStorageFileName(originalName);
+    const filePath = `${BOOKS_FILES_DIR}/${user.id}/${Date.now()}_${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("books")
       .upload(filePath, file.buffer, {
-        contentType: file.mimetype,
+        contentType: bookContentTypeForExt(ext, file.mimetype),
         upsert: false,
         cacheControl: "3600",
       });
 
-    if (uploadError) return res.status(500).json({ error: uploadError.message });
+    if (uploadError) {
+      console.error("❌ Storage error /submissions upload:", uploadError);
+      const msg = uploadError.message?.includes("mime")
+        ? `${uploadError.message} — tipos aceites: PDF, EPUB, MOBI (máx. 50MB).`
+        : uploadError.message;
+      return res.status(500).json({ error: msg });
+    }
 
     const { data: submission, error: insertError } = await supabase
       .from("book_submissions")
@@ -456,17 +641,13 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
     if (!submission) return res.status(404).json({ error: "Not found" });
     if (submission.status !== "pending") return res.status(400).json({ error: "Submission is not pending" });
 
-    const { error: upErr } = await supabase
-      .from("book_submissions")
-      .update({
-        status: "approved",
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: admin.id,
-      })
-      .eq("id", id);
-    if (upErr) {
-      console.error("❌ Database error /admin/submissions approve status:", upErr);
-      return res.status(500).json({ error: "Falha ao atualizar status da submissão." });
+    const { data: existingBook } = await supabase
+      .from("books")
+      .select("id")
+      .eq("submission_id", submission.id)
+      .maybeSingle();
+    if (existingBook) {
+      return res.status(409).json({ error: "Submission already approved into catalog." });
     }
 
     const { error: bookErr } = await supabase.from("books").insert({
@@ -481,6 +662,21 @@ app.post("/admin/submissions/:id/approve", async (req: Request, res: Response) =
     if (bookErr) {
       console.error("❌ Database error /admin/submissions approve insert book:", bookErr);
       return res.status(500).json({ error: "Erro ao inserir livro aprovado no catálogo." });
+    }
+
+    const { error: upErr } = await supabase
+      .from("book_submissions")
+      .update({
+        status: "approved",
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: admin.id,
+      })
+      .eq("id", id)
+      .eq("status", "pending");
+    if (upErr) {
+      console.error("❌ Database error /admin/submissions approve status:", upErr);
+      await supabase.from("books").delete().eq("submission_id", submission.id);
+      return res.status(500).json({ error: "Falha ao atualizar status da submissão." });
     }
     return res.json({ ok: true });
   } catch (err: any) {
@@ -498,6 +694,15 @@ app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) =>
     const rejection_reason = String(req.body?.rejection_reason ?? "").trim();
     if (!rejection_reason) return res.status(400).json({ error: "rejection_reason is required" });
 
+    const { data: submission, error: loadErr } = await supabase
+      .from("book_submissions")
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle();
+    if (loadErr) return res.status(500).json({ error: loadErr.message });
+    if (!submission) return res.status(404).json({ error: "Not found" });
+    if (submission.status !== "pending") return res.status(400).json({ error: "Submission is not pending" });
+
     const { error } = await supabase
       .from("book_submissions")
       .update({
@@ -506,7 +711,8 @@ app.post("/admin/submissions/:id/reject", async (req: Request, res: Response) =>
         reviewed_at: new Date().toISOString(),
         reviewed_by: admin.id,
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("status", "pending");
     if (error) {
       console.error("❌ Database error /admin/submissions reject:", error);
       return res.status(500).json({ error: "Erro ao rejeitar submissão." });
@@ -523,24 +729,15 @@ app.get("/admin/storage/books", async (req: Request, res: Response) => {
   requests++;
   try {
     await requireAdmin(req);
-    const { data, error } = await supabase.storage.from("books").list("", {
-      limit: 2000,
-      sortBy: { column: "name", order: "asc" },
-    });
-    if (error) {
-      console.error("❌ Database error:", error);
-      return res.status(500).json({ error: "Erro interno de banco de dados." });
-    }
-    const files = (data ?? []).filter(
-      (f) =>
-        f.name &&
-        (f.name.endsWith(".pdf") || f.name.endsWith(".epub") || f.name.endsWith(".mobi"))
-    );
+    const files = await listLivrosBookFiles();
     return res.json({ files });
   } catch (err: any) {
-    console.error("❌ Unexpected server error:", err);
-    const status = err?.statusCode ? Number(err.statusCode) : 500;
-    return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
+    console.error("❌ Storage error /admin/storage/books:", err);
+    const msg =
+      err?.message && typeof err.message === "string"
+        ? err.message
+        : "Erro ao listar arquivos em books/livros/.";
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -548,8 +745,8 @@ app.get("/admin/storage/books/download", async (req: Request, res: Response) => 
   requests++;
   try {
     await requireAdmin(req);
-    const filePath = String(req.query.path ?? "");
-    if (!filePath) return res.status(400).json({ error: "path query required" });
+    const filePath = sanitizeStoragePath(String(req.query.path ?? ""));
+    if (!filePath) return res.status(400).json({ error: "path query required or invalid" });
 
     const { data: fileData, error: fileError } = await supabase.storage.from("books").download(filePath);
     if (fileError) return res.status(500).json({ error: fileError.message });
@@ -632,10 +829,15 @@ app.post("/admin/books/import", async (req: Request, res: Response) => {
     const title = String(b.title ?? "").trim();
     const author = String(b.author ?? "").trim();
     const category = String(b.category ?? "").trim();
-    const file_path = String(b.file_path ?? "").trim();
+    const file_path = normalizeBookFilePath(String(b.file_path ?? ""));
     const file_type = String(b.file_type ?? "pdf").trim().toLowerCase();
     if (!title || !author || !category || !file_path) {
       return res.status(400).json({ error: "title, author, category, file_path are required" });
+    }
+
+    const storageErr = await assertBookFileInStorage(file_path);
+    if (storageErr) {
+      return res.status(400).json({ error: storageErr });
     }
 
     const releaseYear = b.release_year ? parseInt(String(b.release_year), 10) : new Date().getFullYear();
@@ -661,14 +863,16 @@ app.post("/admin/books/import", async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      console.error("❌ Database error:", error);
-      return res.status(500).json({ error: "Erro interno de banco de dados." });
+      console.error("❌ Database error /admin/books/import:", error);
+      return res.status(500).json({
+        error: error.message || "Erro ao gravar livro na tabela books.",
+      });
     }
-    
+
     data.cover_image = rewriteBookUrl(data.cover_image, req);
     return res.status(201).json({ book: data });
   } catch (err: any) {
-    console.error("❌ Unexpected server error:", err);
+    console.error("❌ Unexpected server error /admin/books/import:", err);
     const status = err?.statusCode ? Number(err.statusCode) : 500;
     return res.status(status).json({ error: "Ocorreu um erro inesperado no servidor." });
   }
@@ -755,15 +959,16 @@ app.get("/quotes/today", async (req: Request, res: Response) => {
 app.get("/images/books/*", async (req: Request, res: Response) => {
   requests++;
   try {
-    let filePath = req.params[0];
-    if (!filePath) return res.status(400).json({ error: "caminho da imagem é obrigatório" });
+    let rawPath = req.params[0];
+    if (!rawPath) return res.status(400).json({ error: "caminho da imagem é obrigatório" });
 
-    // Decodifica se houver caracteres como %20
     try {
-      filePath = decodeURIComponent(filePath);
+      rawPath = decodeURIComponent(rawPath);
     } catch {
-      // mantém como está se falhar
+      /* keep raw */
     }
+    const filePath = sanitizeStoragePath(rawPath);
+    if (!filePath) return res.status(400).json({ error: "caminho da imagem inválido" });
 
     const { data: fileData, error: fileError } = await supabase.storage.from("books").download(filePath);
     if (fileError) {
@@ -805,7 +1010,29 @@ app.get("/books/:id/reviews", async (req: Request, res: Response) => {
       console.error("❌ Database error /books/:id/reviews:", error);
       return res.status(500).json({ error: "Erro técnico ao buscar avaliações." });
     }
-    return res.json({ reviews: data ?? [] });
+
+    const rows = data ?? [];
+    const userIds = Array.from(new Set(rows.map((r: { user_id: string }) => r.user_id).filter(Boolean)));
+    let nameByUser: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, username")
+        .in("user_id", userIds);
+      nameByUser = Object.fromEntries(
+        (profiles ?? []).map((p: { user_id: string; username: string }) => [p.user_id, p.username])
+      );
+    }
+
+    const reviews = rows.map((r: { id: string; rating: number; comment: string | null; created_at: string; user_id: string }) => ({
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.created_at,
+      author_name: nameByUser[r.user_id] || "Leitor",
+    }));
+
+    return res.json({ reviews });
   } catch (err: any) {
     console.error("❌ Unexpected error /books/:id/reviews:", err);
     return res.status(500).json({ error: "Erro inesperado ao carregar avaliações." });
@@ -846,41 +1073,43 @@ app.put("/books/:id/reviews", async (req: Request, res: Response) => {
   }
 });
 
-// POST /books -> cria (exige body { title, author })
+// POST /books -> admin only; alinhado ao schema (use /admin/books/import para catálogo completo)
 app.post("/books", async (req: Request, res: Response) => {
   requests++;
   try {
-    const { title, author, description, isbn, pages } = req.body;
-    
-    // Validação mais robusta
-    if (!title?.trim() || !author?.trim()) {
-      return res.status(400).json({ 
-        error: "title and author are required and cannot be empty" 
+    await requireAdmin(req);
+    const title = String(req.body?.title ?? "").trim();
+    const author = String(req.body?.author ?? "").trim();
+    const category = String(req.body?.category ?? "").trim();
+    const file_path = normalizeBookFilePath(String(req.body?.file_path ?? ""));
+    const file_type = String(req.body?.file_type ?? "pdf").trim().toLowerCase();
+    const description = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+
+    if (!title || !author || !category || !file_path) {
+      return res.status(400).json({
+        error: "title, author, category and file_path are required",
       });
     }
-
-    const bookData = { 
-      title: title.trim(), 
-      author: author.trim(),
-      ...(description && { description: description.trim() }),
-      ...(isbn && { isbn }),
-      ...(pages && { pages: parseInt(pages) })
-    };
 
     const { data, error } = await supabase
       .from("books")
-      .insert([bookData])
+      .insert({
+        title,
+        author,
+        description,
+        category,
+        file_path,
+        file_type,
+      })
       .select()
       .single();
-      
+
     if (error) {
       console.error("❌ Database error /books POST:", error);
       const msg = process.env.NODE_ENV === "test" ? "Failed to create book" : "Erro técnico ao salvar livro.";
-      return res.status(500).json({ 
-        error: msg 
-      });
+      return res.status(500).json({ error: msg });
     }
-    
+
     return res.status(201).json({ book: data });
   } catch (err: any) {
     console.error("❌ Unexpected error POST /books:", err);

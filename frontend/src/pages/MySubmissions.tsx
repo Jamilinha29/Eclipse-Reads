@@ -37,10 +37,13 @@ const MySubmissions = () => {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { userId, token } = useAuth();
+  const { userId, token, authType } = useAuth();
 
   const loadSubmissions = useCallback(async () => {
-    if (!userId || !token) return;
+    if (!userId || !token) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -117,6 +120,20 @@ const MySubmissions = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Carregando submissões...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!userId || !token || authType === "guest") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <Card className="p-8 max-w-md text-center">
+          <h2 className="text-xl font-bold mb-2">Login necessário</h2>
+          <p className="text-muted-foreground mb-6">
+            Faça login com e-mail ou Google para ver suas submissões de livros.
+          </p>
+          <Button onClick={() => navigate("/auth")}>Ir para login</Button>
+        </Card>
       </div>
     );
   }

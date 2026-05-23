@@ -1,9 +1,27 @@
 // Endpoints dos serviços backend (bases em `apiBases.ts` — env na Vercel, /api/* só em dev).
-import { BOOKS_API_BASE_URL, LIBRARY_API_BASE_URL } from "@/lib/apiBases";
+import { BOOKS_API_BASE_URL, LIBRARY_API_BASE_URL, PRODUCTION_API_CONFIG_MESSAGE } from "@/lib/apiBases";
+
+const assertBooksApi = () => {
+  if (!BOOKS_API_BASE_URL) {
+    throw new Error(PRODUCTION_API_CONFIG_MESSAGE);
+  }
+};
+
+const assertLibraryApi = () => {
+  if (!LIBRARY_API_BASE_URL) {
+    throw new Error(PRODUCTION_API_CONFIG_MESSAGE);
+  }
+};
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
+    if (response.status === 401) {
+      throw new Error(error.error || "Sessão expirada. Faça login novamente.");
+    }
+    if (response.status === 403) {
+      throw new Error(error.error || "Você não tem permissão para esta ação.");
+    }
     throw new Error(error.error || `Erro ${response.status}`);
   }
   return response.json();
@@ -12,6 +30,7 @@ const handleResponse = async (response: Response) => {
 export const api = {
   // Books endpoints
   async getBooks() {
+    assertBooksApi();
     const response = await fetch(`${BOOKS_API_BASE_URL}/books`);
     return handleResponse(response);
   },
@@ -21,8 +40,14 @@ export const api = {
     return handleResponse(response);
   },
 
-  getBookFileUrl(id: string) {
-    return `${BOOKS_API_BASE_URL}/books/${id}/file`;
+  getBookFileUrl(id: string, access?: string) {
+    const base = `${BOOKS_API_BASE_URL}/books/${id}/file`;
+    return access ? `${base}?access=${encodeURIComponent(access)}` : base;
+  },
+
+  async getBookFileAccess(id: string) {
+    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}/file-access`);
+    return handleResponse(response) as Promise<{ url: string; access: string; expiresIn: number }>;
   },
 
   async getQuoteOfDay(options?: { rotate?: boolean }) {
@@ -162,6 +187,13 @@ export const api = {
   async toggleAchievement(id: string, token: string) {
     const response = await fetch(`${LIBRARY_API_BASE_URL}/me/achievements/${id}/toggle`, {
       method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return handleResponse(response);
+  },
+
+  async getMeAchievements(token: string) {
+    const response = await fetch(`${LIBRARY_API_BASE_URL}/me/achievements`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return handleResponse(response);
@@ -318,31 +350,6 @@ export const api = {
     return handleResponse(response);
   },
 
-  async createBook(book: Record<string, any>) {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/books`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(book),
-    });
-    return handleResponse(response);
-  },
-
-  async updateBook(id: string, book: Record<string, any>) {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(book),
-    });
-    return handleResponse(response);
-  },
-
-  async deleteBook(id: string) {
-    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${id}`, {
-      method: 'DELETE',
-    });
-    return handleResponse(response);
-  },
-
   // Library endpoints - com autenticação
   async getLibrary(type: 'favoritos' | 'lendo' | 'lidos', token: string) {
     const response = await fetch(
@@ -376,6 +383,29 @@ export const api = {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+    });
+    return handleResponse(response);
+  },
+
+  async getBookReviews(bookId: string) {
+    assertBooksApi();
+    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${bookId}/reviews`);
+    return handleResponse(response);
+  },
+
+  async upsertBookReview(
+    bookId: string,
+    payload: { rating: number; comment: string | null },
+    token: string
+  ) {
+    assertBooksApi();
+    const response = await fetch(`${BOOKS_API_BASE_URL}/books/${bookId}/reviews`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
     return handleResponse(response);
   },

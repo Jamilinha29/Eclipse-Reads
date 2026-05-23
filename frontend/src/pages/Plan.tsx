@@ -67,7 +67,7 @@ const Plan = () => {
               <h2 className="text-xl font-bold">Plano Atual</h2>
             </div>
             <span className="text-sm px-3 py-1 rounded-full bg-white/20">
-              Válido até novembro de 2025
+              Sem vencimento — plano gratuito
             </span>
           </div>
           <p className="text-lg font-bold">

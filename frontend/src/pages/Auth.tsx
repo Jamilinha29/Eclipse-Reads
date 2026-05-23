@@ -12,7 +12,6 @@ import {
   supabase,
   AUTH_REMEMBER_ME_KEY,
   AUTH_SAVED_EMAIL_KEY,
-  AUTH_SAVED_PASSWORD_KEY,
 } from "@/integrations/supabase/client";
 import { GUEST_AUTH_FLAG_KEY } from "@/integrations/supabase/profileMediaStorage";
 import { UserRound } from "lucide-react";
@@ -84,10 +83,19 @@ const isEmailNotConfirmedError = (message: string | undefined) => {
 
 const Auth = () => {
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "true"
+        ? localStorage.getItem(AUTH_SAVED_EMAIL_KEY) ?? ""
+        : "";
+    } catch {
+      return "";
+    }
+  });
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
   
@@ -136,7 +144,6 @@ const Auth = () => {
     localStorage.removeItem(AUTH_REMEMBER_ME_KEY);
     try {
       localStorage.removeItem(AUTH_SAVED_EMAIL_KEY);
-      localStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
     } catch {
       /* ignore */
     }
@@ -192,11 +199,10 @@ const Auth = () => {
       try {
         if (rememberMe) {
           localStorage.setItem(AUTH_SAVED_EMAIL_KEY, email);
-          localStorage.setItem(AUTH_SAVED_PASSWORD_KEY, password);
         } else {
           localStorage.removeItem(AUTH_SAVED_EMAIL_KEY);
-          localStorage.removeItem(AUTH_SAVED_PASSWORD_KEY);
         }
+        localStorage.removeItem("eclipse_reads_saved_password");
       } catch {
         /* ignore */
       }
@@ -218,6 +224,11 @@ const Auth = () => {
 
     if (!signupPasswordMeetsMinimum(password)) {
       toast.error("A senha deve ter no mínimo 6 caracteres");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      toast.error("Aceite os termos de uso e a política de privacidade para continuar");
       return;
     }
 
@@ -243,7 +254,9 @@ const Auth = () => {
     });
 
     if (isRedirectConfigError(signUpResponse.error?.message)) {
-      console.log("⚠️ [Auth Debug] Erro de Redirect detectado, tentando sem emailRedirectTo...", signUpResponse.error);
+      if (import.meta.env.DEV) {
+        console.log("⚠️ [Auth Debug] Erro de Redirect detectado, tentando sem emailRedirectTo...", signUpResponse.error);
+      }
       signUpResponse = await authClient.signUp({
         email,
         password,
@@ -258,7 +271,9 @@ const Auth = () => {
     setLoading(false);
     const { data: signData, error } = signUpResponse;
 
-    console.log("🚨 [Auth Debug] Resposta completa do Supabase signUp:", { signData, error });
+    if (import.meta.env.DEV) {
+      console.log("🚨 [Auth Debug] Resposta completa do Supabase signUp:", { signData, error });
+    }
 
     if (error) {
       if (isAlreadyRegisteredError(error.message)) {
@@ -484,7 +499,11 @@ const Auth = () => {
                   />
                 </div>
                 <div className="flex items-start space-x-2">
-                  <Checkbox id="terms" />
+                  <Checkbox
+                    id="terms"
+                    checked={acceptedTerms}
+                    onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                  />
                   <label htmlFor="terms" className="text-sm cursor-pointer select-none leading-relaxed">
                     Eu aceito os{" "}
                     <span className="text-primary underline">termos de uso</span> e{" "}

@@ -76,13 +76,30 @@ const Profile = () => {
   // Carrega estatísticas do administrador
   useEffect(() => {
     const loadAdminStats = async () => {
-      if (!isAdmin) return;
-      // Mantém UI mas evita expor Supabase REST no frontend.
-      // (Implementação completa de stats/admin será migrada no AdminPanel.)
+      if (!isAdmin || !token) return;
+      try {
+        const [booksRes, subsRes] = await Promise.all([
+          api.getBooks(),
+          api.getAdminSubmissions(token),
+        ]);
+        const books = booksRes?.books ?? [];
+        const submissions = subsRes?.submissions ?? [];
+        const categories = new Set(
+          books.map((b: { category?: string }) => b.category).filter(Boolean)
+        );
+        setAdminStatsData({
+          totalBooks: books.length,
+          pendingSubmissions: submissions.filter((s: { status: string }) => s.status === "pending").length,
+          approvedSubmissions: submissions.filter((s: { status: string }) => s.status === "approved").length,
+          totalCategories: categories.size,
+        });
+      } catch (err) {
+        console.error("Erro ao carregar estatísticas admin:", err);
+      }
     };
 
-    loadAdminStats();
-  }, [isAdmin]);
+    void loadAdminStats();
+  }, [isAdmin, token]);
 
   // Carrega metas do Supabase
   useEffect(() => {
@@ -105,10 +122,9 @@ const Profile = () => {
         if (token) {
           const { totalPagesRead: total } = await api.getMeStats(token);
           setTotalPagesRead(total);
-          
-          // No mundo real, buscaríamos quais conquistas o usuário já tem.
-          // Para simplificar e permitir "marcar", vamos assumir que o usuário pode clicar.
-          // Se as tabelas user_achievements existirem, podemos carregar aqui.
+
+          const { achievementIds } = await api.getMeAchievements(token);
+          setUserAchievementIds(achievementIds ?? []);
         }
       } catch (err) {
         console.error("Erro ao carregar dados de perfil:", err);

@@ -37,6 +37,8 @@ const Read = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [fileUrl, setFileUrl] = useState<string>("");
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [epubTargetHref, setEpubTargetHref] = useState<string | null>(null);
   /** Zoom da folha do PDF (1 = 100%; afeta apenas PDF). */
   const [pdfZoom, setPdfZoom] = useState(1);
   const [readingMode, setReadingMode] = useState<"horizontal" | "vertical">("horizontal");
@@ -60,7 +62,12 @@ const Read = () => {
         if (!addedToReading) {
           toastNeedLogin("Limite atingido! Faça login para adicionar mais livros.", navigate);
         }
-        setFileUrl(api.getBookFileUrl(id));
+        try {
+          const { access } = await api.getBookFileAccess(id);
+          setFileUrl(api.getBookFileUrl(id, access));
+        } catch {
+          setFileUrl(api.getBookFileUrl(id));
+        }
       } catch (error) {
         console.error("Error loading book:", error);
         toast.error("Erro ao carregar livro");
@@ -74,13 +81,22 @@ const Read = () => {
   }, [id, navigate, addToReading, bookLimit]);
 
   useEffect(() => {
+    setProgressLoaded(false);
     const loadProgress = async () => {
-      if (!userId || !id || !token) return;
+      if (!userId || !id || !token) {
+        setProgressLoaded(true);
+        return;
+      }
       try {
         const { progress } = await api.getReadingProgress(id, token);
-        if (progress) setCurrentPage(progress.current_page || 1);
+        if (progress) {
+          setCurrentPage(progress.current_page || 1);
+          if (progress.total_pages) setTotalPages(progress.total_pages);
+        }
       } catch {
         // ignore
+      } finally {
+        setProgressLoaded(true);
       }
     };
 
@@ -89,7 +105,7 @@ const Read = () => {
 
   useEffect(() => {
     const saveProgress = async () => {
-      if (!userId || !id || !token) return;
+      if (!userId || !id || !token || !progressLoaded) return;
 
       const progressPercentage = ((currentPage / totalPages) * 100).toFixed(2);
 
@@ -106,7 +122,7 @@ const Read = () => {
 
     const debounceTimer = setTimeout(saveProgress, 1000);
     return () => clearTimeout(debounceTimer);
-  }, [currentPage, userId, id, totalPages, token]);
+  }, [currentPage, userId, id, totalPages, token, progressLoaded]);
 
   const handleToggleRead = async () => {
     if (!id) return;
@@ -140,20 +156,26 @@ const Read = () => {
 
   useEffect(() => {
     if (readingMode !== "horizontal") return;
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Home") {
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
         handlePrevPage();
-      } else if (e.key === "End") {
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
         handleNextPage();
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        setCurrentPage(1);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        setCurrentPage(totalPages);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentPage, totalPages, readingMode, handleNextPage, handlePrevPage]);
+  }, [readingMode, handleNextPage, handlePrevPage, totalPages]);
 
   if (loading) {
     return (
@@ -249,7 +271,7 @@ const Read = () => {
                       </div>
                       <p className="text-xs text-muted-foreground px-1">
                         {readingMode === "horizontal" 
-                          ? "Use setas ou teclas Home/End para navegar" 
+                          ? "Setas ← → ou PageUp/PageDown: páginas | Home: início | End: fim" 
                           : "Role a página para ler"}
                       </p>
                     </div>
@@ -311,7 +333,9 @@ const Read = () => {
                   {tocItems.map((item, index) => (
                     <DropdownMenuItem 
                       key={index}
-                      onClick={() => setCurrentPage(index + 1)}
+                      onClick={() => {
+                        if (item.href) setEpubTargetHref(item.href);
+                      }}
                       className="cursor-pointer"
                     >
                       {item.label}
@@ -335,6 +359,8 @@ const Read = () => {
           pageSize={pageSize}
           onTocLoaded={handleTocLoaded}
           pdfZoom={pdfZoom}
+          epubTargetHref={epubTargetHref}
+          onEpubLocationChange={setCurrentPage}
         />
       </main>
 

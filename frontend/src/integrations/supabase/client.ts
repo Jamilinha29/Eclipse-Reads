@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 export const AUTH_REMEMBER_ME_KEY = "eclipse_reads_remember_me";
-/** Preenchidos só quando "Lembrar-me" está ativo (localStorage). */
+/** Preenchido só quando "Lembrar-me" está ativo (localStorage). */
 export const AUTH_SAVED_EMAIL_KEY = "eclipse_reads_saved_email";
+/** Legado — removido por segurança; limpar se existir. */
 export const AUTH_SAVED_PASSWORD_KEY = "eclipse_reads_saved_password";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;

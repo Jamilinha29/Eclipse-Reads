@@ -1,11 +1,11 @@
 /**
- * API books-api: catálogo público GET /books e criação POST /books (sem fluxo Supabase Auth no browser).
+ * API books-api: catálogo público GET /books e criação POST /books (admin only).
  */
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { supabaseCreateClientMock } from "../mocks/supabaseRegistry";
 import { loadBooksApi } from "../helpers/loadApps";
-import { createBooksSupabaseMock } from "../helpers/supabaseFactories";
+import { createAuthClientMock, createBooksSupabaseMock } from "../helpers/supabaseFactories";
 
 describe("books-api catálogo (API)", () => {
   it("GET /books retorna lista apenas de itens com file_path e estrutura esperada", async () => {
@@ -51,20 +51,41 @@ describe("books-api catálogo (API)", () => {
     expect(res.body.books[0]).toHaveProperty("cover_image");
   });
 
-  it("POST /books 400 quando title ou author ausentes ou vazios", async () => {
+  it("POST /books 401 sem Authorization", async () => {
     const mock = createBooksSupabaseMock();
     supabaseCreateClientMock.mockReturnValueOnce(mock);
 
     const app = await loadBooksApi();
-    const emptyTitle = await request(app).post("/books").send({ title: "   ", author: "A" });
-    expect(emptyTitle.status).toBe(400);
-    expect(emptyTitle.body.error).toMatch(/title and author/i);
+    const res = await request(app).post("/books").send({ title: "Novo", author: "Autor" });
+    expect(res.status).toBe(401);
+  });
 
-    const missing = await request(app).post("/books").send({ author: "A" });
+  it("POST /books 400 quando campos obrigatórios ausentes (admin)", async () => {
+    const mock = createBooksSupabaseMock();
+    const auth = createAuthClientMock(() =>
+      Promise.resolve({ data: { user: { id: "admin-1" } }, error: null })
+    );
+    supabaseCreateClientMock
+      .mockReturnValueOnce(mock)
+      .mockReturnValueOnce(auth)
+      .mockReturnValueOnce(auth);
+
+    const app = await loadBooksApi();
+    const emptyTitle = await request(app)
+      .post("/books")
+      .set("Authorization", "Bearer tok")
+      .send({ title: "   ", author: "A", category: "fic", file_path: "x.pdf" });
+    expect(emptyTitle.status).toBe(400);
+    expect(emptyTitle.body.error).toMatch(/title, author, category and file_path/i);
+
+    const missing = await request(app)
+      .post("/books")
+      .set("Authorization", "Bearer tok")
+      .send({ author: "A" });
     expect(missing.status).toBe(400);
   });
 
-  it("POST /books 201 e body.book quando insert OK", async () => {
+  it("POST /books 201 e body.book quando insert OK (admin)", async () => {
     const mock = createBooksSupabaseMock({
       insertResult: () =>
         Promise.resolve({
@@ -72,10 +93,22 @@ describe("books-api catálogo (API)", () => {
           error: null,
         }),
     });
-    supabaseCreateClientMock.mockReturnValueOnce(mock);
+    const auth = createAuthClientMock(() =>
+      Promise.resolve({ data: { user: { id: "admin-1" } }, error: null })
+    );
+    supabaseCreateClientMock.mockReturnValueOnce(mock).mockReturnValueOnce(auth);
 
     const app = await loadBooksApi();
-    const res = await request(app).post("/books").send({ title: "  Novo  ", author: "  Autor  " });
+    const res = await request(app)
+      .post("/books")
+      .set("Authorization", "Bearer tok")
+      .send({
+        title: "  Novo  ",
+        author: "  Autor  ",
+        category: "fic",
+        file_path: "livros/book.pdf",
+        file_type: "pdf",
+      });
 
     expect(res.status).toBe(201);
     expect(res.body.book.id).toBe("new-id");

@@ -1,73 +1,132 @@
-# Eclipse Reads - Deploy na Vercel
+# Eclipse Reads — Deploy na Vercel
 
-## Deploy recomendado (frontend + auth-proxy público)
+## Uma pasta `api/` (raiz do repositório)
 
-Para o site estático **e** as rotas HTTP do auth-proxy (`/api/auth/login`, `/api/auth/validate`, etc.) funcionarem no mesmo domínio:
+O projeto usa **uma única** superfície de serverless na Vercel: a pasta **`api/` na raiz do repo** (não existe `frontend/api/`).
+
+| Arquivo | Função | Ativo no deploy recomendado? |
+|---------|--------|------------------------------|
+| `api/auth.ts` | Auth-proxy (`/api/auth/*`) | **Sim** — rewrites em `vercel.json` (raiz) |
+| `api/books.ts` | Books-api (opcional) | Não — em produção use host dedicado ou local |
+| `api/library.ts` | Library-service (opcional) | Não — idem |
+
+Cada `api/*.ts` reexporta o Express em `services/backend/*/src/index.ts`. O código-fonte dos microserviços continua em `services/backend/`; `api/` é só o **adaptador** para a Vercel.
+
+**Login no app:** o React usa o cliente Supabase (`signInWithPassword` em `frontend/src`). As rotas `/api/auth/*` servem para integrações, testes, validação de token no mesmo domínio e compatibilidade com o auth-proxy — não substituem o fluxo principal do navegador.
+
+---
+
+## Deploy recomendado (SPA + `/api/auth`)
+
+Site estático **e** auth-proxy no **mesmo domínio**.
 
 ### Painel da Vercel
 
 | Campo | Valor |
 |--------|--------|
 | **Root Directory** | *(vazio — raiz do repositório)* |
-| **Framework Preset** | Other *(ou detecta pelo `vercel.json`)* |
-| **Build Command** | *(usa `vercel.json`: `cd frontend && npm run build`)* |
-| **Output Directory** | *(usa `vercel.json`: `frontend/dist`)* |
-| **Install Command** | `npm install` *(na raiz — instala workspaces)* |
+| **Framework Preset** | Other |
+| **Build / Output / Install** | Definidos em `vercel.json` na raiz |
 | **Node.js** | 20.x |
 
-O arquivo **`vercel.json` na raiz do repo** define build, `outputDirectory`, rewrites do SPA e encaminhamento de `/api/auth/*` para a serverless function **`api/auth.ts`**.
+O CI (`.github/workflows/main.yml`) executa `npx vercel --prod` **na raiz**, alinhado a este fluxo.
 
 ### Variáveis de ambiente (obrigatórias)
 
 **Frontend (prefixo `VITE_` — embutidas no build):**
 
-```
+```env
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=SUA_CHAVE_ANON_PUBLICA
+VITE_BOOKS_API_URL=https://url-do-books-api
+VITE_LIBRARY_API_URL=https://url-do-library-service
 ```
 
-**Auth-proxy na Vercel (serverless — não use prefixo `VITE_`):**
+**Auth serverless (`api/auth.ts` — sem prefixo `VITE_`):**
 
-```
+```env
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
-SUPABASE_ANON_KEY=MESMA_CHAVE_ANON_PUBLICA_DO_SUPABASE
+SUPABASE_ANON_KEY=MESMA_CHAVE_ANON_PUBLICA
 ```
 
-Use o mesmo projeto Supabase que no frontend (`SUPABASE_URL` = URL do projeto; `SUPABASE_ANON_KEY` = anon/publishable key). Sem essas duas, a função `api/auth` encerra com erro ao inicializar.
+Sem `SUPABASE_URL` e `SUPABASE_ANON_KEY`, a função `api/auth` falha ao iniciar.
 
-### URLs públicas do auth-proxy (após deploy)
+### URLs públicas do auth-proxy
 
 Substitua `https://seu-projeto.vercel.app` pelo domínio real:
 
-- `POST https://seu-projeto.vercel.app/api/auth/login`
-- `POST https://seu-projeto.vercel.app/api/auth/signup` ou `.../cadastro`
-- `GET https://seu-projeto.vercel.app/api/auth/validate` (header `Authorization: Bearer …`)
-- `GET https://seu-projeto.vercel.app/api/auth/health`
+- `GET  .../api/auth/health`
+- `POST .../api/auth/login`
+- `POST .../api/auth/signup` ou `.../cadastro`
+- `GET  .../api/auth/validate` (header `Authorization: Bearer …`)
+
+### Validação pós-deploy
+
+```bash
+curl -s https://seu-projeto.vercel.app/api/auth/health
+```
+
+Resposta esperada: JSON com status ok — **não** HTML do `index.html` do React.
 
 ---
 
-## Deploy só do frontend (sem API auth na Vercel)
+## Deploy só do frontend (modo SPA)
 
-Se **Root Directory** = `frontend`, só o build estático sobe; **`api/` na raiz não é deployado**. Login continua pelo Supabase no navegador; não há `/api/auth/*` no domínio.
+Se **Root Directory** = `frontend`:
 
-Use o `frontend/vercel.json` local ou as mesmas variáveis só `VITE_*`.
+- Sobe apenas o build Vite (`frontend/vercel.json` — **sem** rewrites de `/api/auth`).
+- A pasta `api/` na raiz **não** entra no deploy.
+- Login segue pelo Supabase no navegador; **não** há `/api/auth/*` no domínio.
+
+Use este modo só se aceitar auth 100% no cliente e backends em outros hosts.
 
 ---
 
-## Estrutura
+## Desenvolvimento local
 
-- **Frontend:** `frontend/` (Vite + React)
-- **Auth-proxy (Express):** `services/backend/auth-proxy/` — exposto na nuvem via `api/auth.ts` na raiz
-- **Demais backends** (books-api, library-service): em geral outros hosts ou só local
+| Rota no browser | Destino |
+|-----------------|--------|
+| `http://localhost:8080` | Vite (frontend) |
+| `/api/auth/*` | Proxy Vite → `http://localhost:4100` (auth-proxy) |
+| `/api/books/*` | Proxy Vite → `http://localhost:4000` |
+| `/api/library/*` | Proxy Vite → `http://localhost:4200` |
+
+```bash
+# Tudo junto (recomendado)
+npm run dev:all
+
+# Ou separado
+cd frontend && npm run dev
+cd services/backend/auth-proxy && npm run dev:env
+```
+
+---
+
+## Estrutura resumida
+
+```
+Eclipse-Reads/
+├── vercel.json          ← deploy produção (raiz)
+├── api/
+│   ├── auth.ts          ← usado na Vercel (rewrites)
+│   ├── books.ts         ← opcional / outros hosts
+│   └── library.ts
+├── frontend/
+│   ├── vercel.json      ← só SPA (Root Directory = frontend)
+│   └── ...
+└── services/backend/
+    ├── auth-proxy/
+    ├── books-api/
+    └── library-service/
+```
 
 ---
 
 ## Comandos úteis
 
 ```bash
-# Frontend
 cd frontend && npm install && npm run dev
-
-# Auth-proxy local (porta 4100)
 cd services/backend/auth-proxy && npm run dev:env
 ```
+
+Guia geral do repositório: [README.md](README.md).

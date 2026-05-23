@@ -93,7 +93,7 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
 
   const storageFrom = vi.fn(() => ({
     list: vi.fn(() => Promise.resolve({ data: [], error: null })),
-    download: vi.fn(() => Promise.resolve({ data: null, error: { message: "no file" } })),
+    download: vi.fn(() => Promise.resolve({ data: { arrayBuffer: async () => new ArrayBuffer(0) }, error: null })),
     upload: vi.fn().mockImplementation(() => storageUploadResult()),
     getPublicUrl: vi.fn(() => ({ data: { publicUrl: "http://test" } })),
     remove: vi.fn(() => Promise.resolve({ error: null })),
@@ -101,6 +101,16 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
 
   return {
     from: vi.fn().mockImplementation((table: string) => {
+      if (table === "user_roles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation(() =>
+              Promise.resolve({ data: [{ role: "admin" }], error: null })
+            ),
+          }),
+        };
+      }
+
       if (table === "book_submissions") {
         return {
           insert: vi.fn().mockReturnValue({
@@ -134,6 +144,12 @@ export const createBooksSupabaseMock = (config: BooksMockConfig = {}) => {
     storage: {
       from: storageFrom,
     },
+    rpc: vi.fn().mockImplementation((name: string) => {
+      if (name === "has_role") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      return Promise.resolve({ data: null, error: { message: `unknown rpc ${name}` } });
+    }),
   };
 };
 

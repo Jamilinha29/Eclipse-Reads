@@ -22,6 +22,22 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/api/auth": {
+        target: "http://localhost:4100",
+        changeOrigin: true,
+      },
+      "/api/books": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/books/, ""),
+      },
+      "/api/library": {
+        target: "http://localhost:4200",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/library/, ""),
+      },
+    },
   },
   plugins: [react(), spaFallback404()],
   resolve: {

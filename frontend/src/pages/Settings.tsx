@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect, useCallback } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
   isValidUsername,
@@ -21,60 +21,62 @@ const Settings = () => {
   const [theme, setTheme] = useState<"light" | "dark">(globalTheme);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [newBooksNotifications, setNewBooksNotifications] = useState(true);
-  const { toast } = useToast();
+  const settingsHydratedRef = useRef(false);
 
   useEffect(() => {
     setLocalUsername(username);
   }, [username]);
 
-  // Carrega configurações do Supabase
   useEffect(() => {
+    settingsHydratedRef.current = false;
+
     const loadSettings = async () => {
-      if (!userId || !token) return;
+      if (!userId || !token) {
+        settingsHydratedRef.current = true;
+        return;
+      }
 
-      const { settings } = await api.getMeSettings(token);
+      try {
+        const { settings } = await api.getMeSettings(token);
 
-      if (settings) {
-        const t = settings.theme as "light" | "dark";
-        setTheme(t);
-        setGlobalTheme(t);
-        setSoundEnabled(!!settings.sound_enabled);
-        setNewBooksNotifications(!!settings.new_books_notifications);
+        if (settings) {
+          const t = settings.theme as "light" | "dark";
+          setTheme(t);
+          setGlobalTheme(t);
+          setSoundEnabled(!!settings.sound_enabled);
+          setNewBooksNotifications(!!settings.new_books_notifications);
+        }
+      } catch {
+        toast.error("Não foi possível carregar suas configurações.");
+      } finally {
+        settingsHydratedRef.current = true;
       }
     };
 
     loadSettings();
   }, [userId, token, setGlobalTheme]);
 
-  // Salva configurações via backend
   const saveSettings = useCallback(async () => {
     if (!userId || !token) return;
     try {
       const response = await api.updateMeSettings(
-        { 
-          theme, 
-          sound_enabled: soundEnabled, 
-          new_books_notifications: newBooksNotifications
+        {
+          theme,
+          sound_enabled: soundEnabled,
+          new_books_notifications: newBooksNotifications,
         },
         token
       );
       if (response.error) {
-        toast({
-          title: "Erro ao salvar",
-          description: response.error,
-          variant: "destructive",
-        });
+        toast.error(response.error);
       }
-    } catch (err) {
-      toast({
-        title: "Erro de conexão",
-        description: "Não foi possível conectar ao servidor de configurações.",
-        variant: "destructive",
-      });
+    } catch {
+      toast.error("Não foi possível conectar ao servidor de configurações.");
     }
-  }, [userId, token, theme, soundEnabled, newBooksNotifications, toast]);
+  }, [userId, token, theme, soundEnabled, newBooksNotifications]);
 
   useEffect(() => {
+    if (!settingsHydratedRef.current) return;
     setGlobalTheme(theme);
     if (userId) {
       saveSettings();
@@ -84,31 +86,25 @@ const Settings = () => {
   const handleSaveUsername = async () => {
     const name = normalizeUsername(localUsername);
     if (!name) {
-      toast({ title: "Digite um nome válido", variant: "destructive" });
+      toast.error("Digite um nome válido");
       return;
     }
     if (!isValidUsername(name)) {
-      toast({
-        title: "Nome de usuário inválido",
-        description: USERNAME_VALIDATION_MESSAGE,
-        variant: "destructive",
-      });
+      toast.error(`Nome de usuário inválido. ${USERNAME_VALIDATION_MESSAGE}`);
       return;
     }
     if (!userId || !token) {
-      toast({ title: "Faça login com e-mail ou Google para salvar o nome", variant: "destructive" });
+      toast.error("Faça login com e-mail ou Google para salvar o nome");
       return;
     }
-    
-    // AuthContext possui um useEffect que salva automaticamente quando o username muda.
-    // Basta chamar setUsername aqui para evitar a 'piscagem' e chamadas duplicadas.
+
     setUsername(name);
-    toast({ title: "Nome de usuário atualizado!" });
+    toast.success("Nome de usuário atualizado!");
   };
 
   const handleThemeChange = (newTheme: "light" | "dark") => {
     setTheme(newTheme);
-    toast({ title: `Tema ${newTheme === "light" ? "Claro" : "Noturno"} ativado!` });
+    toast.success(`Tema ${newTheme === "light" ? "Claro" : "Noturno"} ativado!`);
   };
 
   return (

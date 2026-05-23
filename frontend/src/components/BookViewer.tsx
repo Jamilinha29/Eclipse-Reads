@@ -18,6 +18,10 @@ interface BookViewerProps {
   onTocLoaded?: (items: any[]) => void;
   /** Multiplicador da largura da folha do PDF (1 = 100%). */
   pdfZoom?: number;
+  /** href do sumário EPUB para navegação direta */
+  epubTargetHref?: string | null;
+  /** Atualiza página quando EPUB muda de localização */
+  onEpubLocationChange?: (page: number) => void;
 }
 
 export const BookViewer = ({ 
@@ -30,6 +34,8 @@ export const BookViewer = ({
   pageSize = "margins",
   onTocLoaded,
   pdfZoom = 1,
+  epubTargetHref,
+  onEpubLocationChange,
 }: BookViewerProps) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [epubBook, setEpubBook] = useState<any>(null);
@@ -96,6 +102,11 @@ export const BookViewer = ({
       
       rendition.display();
       
+      rendition.on("relocated", (location: { start?: { displayed?: { page?: number } } }) => {
+        const page = location?.start?.displayed?.page;
+        if (page && onEpubLocationChange) onEpubLocationChange(page);
+      });
+      
       // Carrega o sumário (table of contents)
       book.loaded.navigation.then((toc: any) => {
         if (onTocLoaded && toc.toc) {
@@ -116,7 +127,14 @@ export const BookViewer = ({
         rendition.destroy();
       };
     }
-  }, [fileUrl, normalizedFileType, onTocLoaded, readingMode, pageSize, onTotalPagesChange]);
+  }, [fileUrl, normalizedFileType, onTocLoaded, readingMode, pageSize, onTotalPagesChange, onEpubLocationChange]);
+
+  // Navegação pelo sumário EPUB (href do epub.js)
+  useEffect(() => {
+    if (epubBook?.rendition && epubTargetHref) {
+      epubBook.rendition.display(epubTargetHref);
+    }
+  }, [epubTargetHref, epubBook]);
 
   // Trata navegação de páginas para EPUB
   useEffect(() => {

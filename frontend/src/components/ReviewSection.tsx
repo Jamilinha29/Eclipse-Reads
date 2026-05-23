@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
-import { Star } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toastNeedLogin } from "@/lib/loginToast";
-import { BOOKS_API_BASE_URL as booksApiBase } from "@/lib/apiBases";
-// (não usamos o api.ts aqui porque ele ainda não expõe reviews)
+import { useState, useEffect, useCallback } from "react";
+import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Review {
   id: string;
   rating: number;
   comment: string | null;
   created_at: string;
-  user_id: string;
+  author_name: string;
 }
 
 export const ReviewSection = ({ bookId }: { bookId: string }) => {
@@ -25,9 +24,12 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
   const [userComment, setUserComment] = useState("");
 
   const loadReviews = useCallback(async () => {
-    const response = await fetch(`${booksApiBase}/books/${bookId}/reviews`);
-    const result = await response.json();
-    if (result?.reviews) setReviews(result.reviews);
+    try {
+      const result = await api.getBookReviews(bookId);
+      if (result?.reviews) setReviews(result.reviews);
+    } catch {
+      /* lista vazia em falha */
+    }
   }, [bookId]);
 
   useEffect(() => {
@@ -46,15 +48,11 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
     }
 
     try {
-      const response = await fetch(`${booksApiBase}/books/${bookId}/reviews`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ rating: userRating, comment: userComment || null }),
-      });
-      if (!response.ok) throw new Error("Erro ao salvar avaliação");
+      await api.upsertBookReview(
+        bookId,
+        { rating: userRating, comment: userComment || null },
+        token
+      );
       toast.success("Avaliação salva!");
       setUserRating(0);
       setUserComment("");
@@ -70,7 +68,7 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
         <h3 className="font-semibold mb-3">Deixe sua avaliação</h3>
         <div className="flex gap-2 mb-3">
           {[1, 2, 3, 4, 5].map((star) => (
-            <button key={star} onClick={() => setUserRating(star)}>
+            <button key={star} type="button" onClick={() => setUserRating(star)}>
               <Star
                 className={`h-6 w-6 ${star <= userRating ? "fill-accent text-accent" : "text-muted-foreground"}`}
               />
@@ -78,28 +76,36 @@ export const ReviewSection = ({ bookId }: { bookId: string }) => {
           ))}
         </div>
         <Textarea
-          placeholder="Escreva um comentário (opcional)"
+          placeholder="Comentário (opcional)"
           value={userComment}
           onChange={(e) => setUserComment(e.target.value)}
           className="mb-3"
         />
-        <Button onClick={handleSubmit}>Enviar Avaliação</Button>
+        <Button onClick={handleSubmit}>Enviar avaliação</Button>
       </div>
 
       <div className="space-y-4">
-        {reviews.map((review) => (
-          <div key={review.id} className="border rounded-lg p-4">
-            <div className="flex gap-1 mb-2">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`h-4 w-4 ${star <= review.rating ? "fill-accent text-accent" : "text-muted-foreground"}`}
-                />
-              ))}
+        <h3 className="font-semibold">Avaliações ({reviews.length})</h3>
+        {reviews.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma avaliação ainda.</p>
+        ) : (
+          reviews.map((review) => (
+            <div key={review.id} className="border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`h-4 w-4 ${star <= review.rating ? "fill-accent text-accent" : "text-muted-foreground"}`}
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-muted-foreground">{review.author_name}</span>
+              </div>
+              {review.comment && <p className="text-sm">{review.comment}</p>}
             </div>
-            {review.comment && <p className="text-sm">{review.comment}</p>}
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
