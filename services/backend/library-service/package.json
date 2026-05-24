@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:env": "node -r dotenv/config -r tsx/esm src/index.ts dotenv_config_path=../envs/library-service.env",
-    "build": "tsc",
+    "build": "npx tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {

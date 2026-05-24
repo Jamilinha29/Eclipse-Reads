@@ -20,6 +20,7 @@ interface Book {
   category: string;
   cover_image: string | null;
   rating: number;
+  age_rating?: string | null;
   created_at: string;
 }
 
@@ -203,7 +204,7 @@ const BookDetail = () => {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <div className="text-muted-foreground text-xs">Faixa Etária</div>
-                  <div className="font-semibold">{(book as any).age_rating || 'Livre'}</div>
+                  <div className="font-semibold">{book.age_rating || "Livre"}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -282,8 +283,8 @@ const BookDetail = () => {
                 <div>
                   <div className="text-sm text-muted-foreground mb-1">Faixa Etária</div>
                   <div className="font-semibold flex items-center gap-2">
-                    {(book as any).age_rating || 'Livre'}
-                    {(book as any).age_rating && (book as any).age_rating !== 'Livre' && (
+                    {book.age_rating || "Livre"}
+                    {book.age_rating && book.age_rating !== "Livre" && (
                       <AlertCircle className="h-4 w-4 text-amber-500" />
                     )}
                   </div>

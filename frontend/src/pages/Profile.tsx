@@ -25,6 +25,12 @@ interface ReadingGoal {
   completed: boolean;
 }
 
+interface AchievementRow {
+  id: string;
+  title: string;
+  description: string | null;
+}
+
 const Profile = () => {
   const navigate = useNavigate();
   const { favorites, reading, read } = useLibrary();
@@ -44,7 +50,7 @@ const Profile = () => {
     approvedSubmissions: 0,
     totalCategories: 0,
   });
-  const [achievements, setAchievements] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<AchievementRow[]>([]);
   const [userAchievementIds, setUserAchievementIds] = useState<string[]>([]);
   const [newAchTitle, setNewAchTitle] = useState("");
   const [newAchDesc, setNewAchDesc] = useState("");

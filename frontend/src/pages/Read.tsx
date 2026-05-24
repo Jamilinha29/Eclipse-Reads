@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { toastNeedLogin } from "@/lib/loginToast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLibrary } from "@/contexts/LibraryContext";
-import { BookViewer } from "@/components/BookViewer";
+import { BookViewer, type EpubTocItem } from "@/components/BookViewer";
 import { api } from "@/lib/api";
 
 interface Book {
@@ -44,7 +44,7 @@ const Read = () => {
   const [readingMode, setReadingMode] = useState<"horizontal" | "vertical">("horizontal");
   const [pageSize, setPageSize] = useState<"margins" | "fullscreen">("margins");
   const [showToc, setShowToc] = useState(false);
-  const [tocItems, setTocItems] = useState<any[]>([]);
+  const [tocItems, setTocItems] = useState<EpubTocItem[]>([]);
 
   useEffect(() => {
     const loadBook = async () => {
@@ -167,7 +167,7 @@ const Read = () => {
     }
   }, [currentPage]);
 
-  const handleTocLoaded = (items: any[]) => {
+  const handleTocLoaded = (items: EpubTocItem[]) => {
     setTocItems(items);
   };
 

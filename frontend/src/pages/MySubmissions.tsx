@@ -49,7 +49,7 @@ const MySubmissions = () => {
     try {
       const result = await api.getMySubmissions(token);
       setSubmissions(result.submissions || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Erro ao carregar submissões");
       console.error(error);
     }
@@ -67,8 +67,9 @@ const MySubmissions = () => {
 
       toast.success("Submissão deletada com sucesso");
       setSubmissions(submissions.filter(s => s.id !== id));
-    } catch (error: any) {
-      toast.error("Erro ao deletar submissão: " + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao deletar submissão: " + message);
     } finally {
       setDeleteId(null);
     }

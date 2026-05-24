@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import type { Database } from "@/integrations/supabase/types";
 import { storageFileBasename } from "@/lib/storageBooks";
 import { ArrowLeft, CheckCircle, XCircle, Shield, Eye, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+type AdminCatalogBook = Database["public"]["Tables"]["books"]["Row"];
 
 interface BookSubmission {
   id: string;
@@ -66,13 +69,13 @@ const AdminPanel = () => {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [bookForms, setBookForms] = useState<Record<string, BookForm>>({});
   const [existingBooks, setExistingBooks] = useState<Set<string>>(new Set());
-  const [existingBooksData, setExistingBooksData] = useState<Map<string, any>>(new Map());
+  const [existingBooksData, setExistingBooksData] = useState<Map<string, AdminCatalogBook>>(new Map());
   const [activeTab, setActiveTab] = useState("submissions");
   const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const { token, loading: authLoading } = useAuth();
 
-  const applyBooksToState = (data: any[]) => {
+  const applyBooksToState = (data: AdminCatalogBook[]) => {
     if (!data?.length) {
       setExistingBooks(new Set());
       setExistingBooksData(new Map());

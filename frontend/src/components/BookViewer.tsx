@@ -28,6 +28,11 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+export interface EpubTocItem {
+  label: string;
+  href?: string;
+}
+
 interface BookViewerProps {
   fileUrl: string;
   fileType: string;
@@ -36,7 +41,7 @@ interface BookViewerProps {
   onTotalPagesChange: (total: number) => void;
   readingMode: "horizontal" | "vertical";
   pageSize?: "margins" | "fullscreen";
-  onTocLoaded?: (items: any[]) => void;
+  onTocLoaded?: (items: EpubTocItem[]) => void;
   /** Multiplicador da largura da folha do PDF (1 = 100%). */
   pdfZoom?: number;
   /** href do sumário EPUB para navegação direta */
@@ -130,7 +135,7 @@ export const BookViewer = ({
       });
       
       // Carrega o sumário (table of contents)
-      book.loaded.navigation.then((toc: any) => {
+      book.loaded.navigation.then((toc: { toc?: EpubTocItem[] }) => {
         if (onTocLoaded && toc.toc) {
           onTocLoaded(toc.toc);
         }

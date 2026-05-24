@@ -101,7 +101,15 @@ const Auth = () => {
   
   const { setAuthType, setUserId, isLoggedIn, authType } = useAuth();
   const navigate = useNavigate();
-  const authClient = supabase.auth as any;
+
+  type AuthResendClient = {
+    resend?: (payload: {
+      type: string;
+      email: string;
+      options?: { emailRedirectTo?: string };
+    }) => Promise<{ error?: { message?: string } | null }>;
+  };
+  const authClient = supabase.auth as AuthResendClient;
 
   const resendConfirmationEmail = async (targetEmail: string, redirectUrl: string) => {
     if (typeof authClient.resend !== "function") {
