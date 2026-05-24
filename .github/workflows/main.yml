@@ -173,21 +173,21 @@ jobs:
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/books-api:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/books-api
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/books-api
           docker push $IMAGE_LOWER
 
       - name: Build & Push Auth Proxy
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/auth-proxy:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/auth-proxy
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/auth-proxy
           docker push $IMAGE_LOWER
 
       - name: Build & Push Library Service
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/library-service:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -f Dockerfile -t $IMAGE_LOWER ./services/backend/library-service
+          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/library-service
           docker push $IMAGE_LOWER
 
 #DEPLOY FRONTEND
