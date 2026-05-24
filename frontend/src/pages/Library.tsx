@@ -12,10 +12,10 @@ import { resolveBookCoverUrl } from "@/lib/coverPlaceholder";
 
 const Library = () => {
   const [activeTab, setActiveTab] = useState<"favoritos" | "lendo" | "lidos">("favoritos");
-  const { favorites, reading, read, libraryBooks, libraryLoading } = useLibrary();
+  const { favorites, reading, read, refreshLibraryBooks } = useLibrary();
   const { authType, bookLimit } = useAuth();
-  const [guestCatalog, setGuestCatalog] = useState<LibraryBook[]>([]);
-  const [guestLoading, setGuestLoading] = useState(false);
+  const [catalog, setCatalog] = useState<LibraryBook[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   const isGuest = authType === "guest";
   const hasReachedLimit = isGuest && favorites.length + reading.length + read.length >= bookLimit;
@@ -27,28 +27,33 @@ const Library = () => {
   }, [activeTab, favorites, reading, read]);
 
   useEffect(() => {
-    if (!isGuest) return;
+    if (!isGuest) {
+      refreshLibraryBooks();
+    }
+  }, [isGuest, refreshLibraryBooks]);
 
-    const loadGuestCatalog = async () => {
-      setGuestLoading(true);
+  useEffect(() => {
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
       try {
         const response = await api.getBooks();
-        if (response?.books) setGuestCatalog(response.books as LibraryBook[]);
+        if (response?.books) setCatalog(response.books as LibraryBook[]);
       } catch {
-        setGuestCatalog([]);
+        setCatalog([]);
       } finally {
-        setGuestLoading(false);
+        setCatalogLoading(false);
       }
     };
 
-    loadGuestCatalog();
-  }, [isGuest]);
+    loadCatalog();
+  }, []);
 
-  const displayBooks = isGuest
-    ? guestCatalog.filter((book) => activeIds.includes(String(book.id)))
-    : libraryBooks[activeTab];
+  const displayBooks = useMemo(
+    () => catalog.filter((book) => activeIds.includes(String(book.id))),
+    [catalog, activeIds],
+  );
 
-  const loading = isGuest ? guestLoading : libraryLoading;
+  const loading = catalogLoading;
 
   const emptyMessages = {
     favoritos: {

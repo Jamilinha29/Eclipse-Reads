@@ -259,14 +259,14 @@ export async function fetchLibrary(type: LibraryTab) {
   if (linksErr) throw new Error(linksErr.message);
 
   const ids = (links ?? []).map((r) => r.book_id).filter(Boolean);
-  if (ids.length === 0) return { books: [] };
+  if (ids.length === 0) return { books: [], bookIds: [] };
 
   const { data: books, error: booksErr } = await supabase
     .from("books")
     .select("id, title, author, category, cover_image, rating, age_rating, created_at, file_path")
     .in("id", ids);
   if (booksErr) throw new Error(booksErr.message);
-  return { books: books ?? [] };
+  return { books: books ?? [], bookIds: ids.map(String) };
 }
 
 export async function addToLibrary(type: LibraryTab, bookId: string) {

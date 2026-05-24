@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { api } from "@/lib/api";
 
@@ -48,6 +48,40 @@ export interface LibraryBook {
 
 type LibraryTab = "favoritos" | "lendo" | "lidos";
 
+type LibraryFetchResult = {
+  books?: LibraryBook[];
+  bookIds?: string[];
+};
+
+function idsFromLibraryResult(data: LibraryFetchResult | null | undefined): string[] {
+  if (data?.bookIds?.length) {
+    return Array.from(new Set(data.bookIds.map(String)));
+  }
+  if (data?.books?.length) {
+    return Array.from(new Set(data.books.map((book) => String(book.id))));
+  }
+  return [];
+}
+
+function applyLibraryFetchResults(
+  favData: LibraryFetchResult | null | undefined,
+  readingData: LibraryFetchResult | null | undefined,
+  readData: LibraryFetchResult | null | undefined,
+) {
+  return {
+    ids: {
+      favoritos: idsFromLibraryResult(favData),
+      lendo: idsFromLibraryResult(readingData),
+      lidos: idsFromLibraryResult(readData),
+    },
+    books: {
+      favoritos: (favData?.books ?? []) as LibraryBook[],
+      lendo: (readingData?.books ?? []) as LibraryBook[],
+      lidos: (readData?.books ?? []) as LibraryBook[],
+    },
+  };
+}
+
 interface LibraryContextType {
   favorites: string[];
   reading: string[];
@@ -83,7 +117,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
   const [libraryLoading, setLibraryLoading] = useState(false);
   const { userId, authType, session } = useAuth();
 
-  const refreshLibraryBooks = async () => {
+  const refreshLibraryBooks = useCallback(async () => {
     if (authType === "guest" || !userId) {
       setLibraryBooks({ favoritos: [], lendo: [], lidos: [] });
       return;
@@ -99,17 +133,17 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
         api.getLibrary("lidos", token),
       ]);
 
-      setLibraryBooks({
-        favoritos: (favData?.books ?? []) as LibraryBook[],
-        lendo: (readingData?.books ?? []) as LibraryBook[],
-        lidos: (readData?.books ?? []) as LibraryBook[],
-      });
+      const { ids, books } = applyLibraryFetchResults(favData, readingData, readData);
+      setFavorites(ids.favoritos);
+      setReading(ids.lendo);
+      setRead(ids.lidos);
+      setLibraryBooks(books);
     } catch (err) {
       console.error("Erro ao carregar livros da biblioteca:", err);
     } finally {
       setLibraryLoading(false);
     }
-  };
+  }, [authType, userId, session?.access_token]);
 
   useEffect(() => {
     const loadLibrary = async () => {
@@ -137,24 +171,11 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
           api.getLibrary("lidos", token),
         ]);
 
-        if (favData?.books) {
-          const ids = favData.books.map((d: LibraryBook) => String(d.id));
-          setFavorites(Array.from(new Set(ids)));
-        }
-        if (readingData?.books) {
-          const ids = readingData.books.map((d: LibraryBook) => String(d.id));
-          setReading(Array.from(new Set(ids)));
-        }
-        if (readData?.books) {
-          const ids = readData.books.map((d: LibraryBook) => String(d.id));
-          setRead(Array.from(new Set(ids)));
-        }
-
-        setLibraryBooks({
-          favoritos: (favData?.books ?? []) as LibraryBook[],
-          lendo: (readingData?.books ?? []) as LibraryBook[],
-          lidos: (readData?.books ?? []) as LibraryBook[],
-        });
+        const { ids, books } = applyLibraryFetchResults(favData, readingData, readData);
+        setFavorites(ids.favoritos);
+        setReading(ids.lendo);
+        setRead(ids.lidos);
+        setLibraryBooks(books);
       } catch (err) {
         console.error("Erro ao carregar biblioteca:", err);
       }
@@ -185,6 +206,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         try {
           await api.addToLibrary("favoritos", bookId, token);
+          await refreshLibraryBooks();
         } catch {
           setFavorites(prev);
           return false;
@@ -203,6 +225,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         try {
           await api.removeFromLibrary("favoritos", bookId, token);
+          await refreshLibraryBooks();
         } catch {
           setFavorites(prev);
         }
@@ -229,6 +252,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
           await api.addToLibrary("favoritos", bookId, token);
         }
         await api.addToLibrary("lendo", bookId, token);
+        await refreshLibraryBooks();
       } catch {
         setFavorites(prevFav);
         setReading(prevReading);
@@ -247,6 +271,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         try {
           await api.removeFromLibrary("lendo", bookId, token);
+          await refreshLibraryBooks();
         } catch {
           setReading(prev);
         }
@@ -270,6 +295,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         try {
           await api.addToLibrary("lidos", bookId, token);
+          await refreshLibraryBooks();
         } catch {
           setRead(prev);
           return false;
@@ -288,6 +314,7 @@ export const LibraryProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         try {
           await api.removeFromLibrary("lidos", bookId, token);
+          await refreshLibraryBooks();
         } catch {
           setRead(prev);
         }
