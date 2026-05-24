@@ -102,28 +102,31 @@ const Auth = () => {
   const { setAuthType, setUserId, isLoggedIn, authType } = useAuth();
   const navigate = useNavigate();
 
-  type AuthResendClient = {
-    resend?: (payload: {
-      type: string;
-      email: string;
-      options?: { emailRedirectTo?: string };
-    }) => Promise<{ error?: { message?: string } | null }>;
+  type AuthResendPayload = {
+    type: string;
+    email: string;
+    options?: { emailRedirectTo?: string };
   };
-  const authClient = supabase.auth as AuthResendClient;
 
   const resendConfirmationEmail = async (targetEmail: string, redirectUrl: string) => {
-    if (typeof authClient.resend !== "function") {
+    const resend = (
+      supabase.auth as {
+        resend?: (payload: AuthResendPayload) => Promise<{ error?: { message?: string } | null }>;
+      }
+    ).resend;
+
+    if (typeof resend !== "function") {
       return { error: { message: "Reenvio não disponível nesta versão do cliente." } };
     }
 
-    let resendResponse = await authClient.resend({
+    let resendResponse = await resend({
       type: "signup",
       email: targetEmail,
       options: { emailRedirectTo: redirectUrl },
     });
 
     if (isRedirectConfigError(resendResponse.error?.message)) {
-      resendResponse = await authClient.resend({
+      resendResponse = await resend({
         type: "signup",
         email: targetEmail,
       });
@@ -170,9 +173,7 @@ const Auth = () => {
 
     localStorage.setItem(AUTH_REMEMBER_ME_KEY, String(rememberMe));
     setLoading(true);
-    const { data, error } = authClient.signInWithPassword
-      ? await authClient.signInWithPassword({ email, password })
-      : await authClient.signIn({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
 
@@ -250,7 +251,7 @@ const Auth = () => {
     // Rota pública: evita perder o hash de confirmação ao passar por rotas protegidas.
     const redirectUrl = `${window.location.origin}/auth`;
 
-    let signUpResponse = await authClient.signUp({
+    let signUpResponse = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -265,7 +266,7 @@ const Auth = () => {
       if (import.meta.env.DEV) {
         console.log("⚠️ [Auth Debug] Erro de Redirect detectado, tentando sem emailRedirectTo...", signUpResponse.error);
       }
-      signUpResponse = await authClient.signUp({
+      signUpResponse = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -323,12 +324,10 @@ const Auth = () => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     const redirectTo = `${window.location.origin}/auth-callback`;
-    const { error } = authClient.signInWithOAuth
-      ? await authClient.signInWithOAuth({
-          provider: "google",
-          options: { redirectTo },
-        })
-      : await authClient.signIn({ provider: "google" }, { redirectTo });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
 
     setLoading(false);
 

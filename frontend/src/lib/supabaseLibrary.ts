@@ -213,7 +213,7 @@ export async function deleteGoal(id: string) {
 
 export async function fetchAchievements() {
   const { data, error } = await supabase
-    .from("achievements" as "profiles")
+    .from("achievements")
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -223,11 +223,11 @@ export async function fetchAchievements() {
 export async function fetchMeAchievements() {
   const userId = await requireUserId();
   const { data, error } = await supabase
-    .from("user_achievements" as "favorites")
+    .from("user_achievements")
     .select("achievement_id")
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
-  return { achievementIds: ((data ?? []) as unknown as { achievement_id: string }[]).map((row) => row.achievement_id) };
+  return { achievementIds: (data ?? []).map((row) => row.achievement_id) };
 }
 
 export async function toggleAchievement(_id: string) {

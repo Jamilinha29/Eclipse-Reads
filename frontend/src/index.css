@@ -81,10 +81,13 @@ Todas as cores DEVEM ser HSL.
     --sidebar-accent-foreground: 270 20% 95%;
     --sidebar-border: 263 30% 25%;
     --sidebar-ring: 270 75% 65%;
-  }
-}
 
-@layer base {
+    --gradient-primary: linear-gradient(135deg, hsl(270 75% 55%), hsl(280 70% 45%));
+    --gradient-accent: linear-gradient(135deg, hsl(270 70% 65%), hsl(280 65% 55%));
+    --shadow-glow: 0 0 40px hsl(270 75% 55% / 0.25);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
   * {
     @apply border-border;
   }
@@ -100,11 +103,13 @@ Todas as cores DEVEM ser HSL.
 }
 
 @layer utilities {
-  .gradient-primary {
+  .gradient-primary,
+  .bg-gradient-primary {
     background: var(--gradient-primary);
   }
-  
-  .gradient-accent {
+
+  .gradient-accent,
+  .bg-gradient-accent {
     background: var(--gradient-accent);
   }
   
