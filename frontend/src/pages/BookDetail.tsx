@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { ReviewSection } from "@/components/ReviewSection";
 import { api } from "@/lib/api";
 import { BOOK_COVER_PLACEHOLDER, resolveBookCoverUrl } from "@/lib/coverPlaceholder";
+import { isWebReadableBookFormat } from "@/lib/bookFileValidation";
 
 interface Book {
   id: string;
@@ -22,6 +23,7 @@ interface Book {
   rating: number;
   age_rating?: string | null;
   created_at: string;
+  file_type?: string | null;
 }
 
 const BookDetail = () => {
@@ -166,7 +168,12 @@ const BookDetail = () => {
               <Button
                 className="flex-1 min-w-[140px] gap-2"
                 size="lg"
+                disabled={!isWebReadableBookFormat(book.file_type)}
                 onClick={async () => {
+                  if (!isWebReadableBookFormat(book.file_type)) {
+                    toast.error("Leitura online disponível apenas para PDF e EPUB.");
+                    return;
+                  }
                   const ok = await handleToggleReading();
                   if (ok) navigate(`/read/${id}`);
                 }}

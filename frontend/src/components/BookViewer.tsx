@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import ePub from "epubjs";
+import { normalizeBookFileType } from "@/lib/bookFileValidation";
 
 interface EpubRendition {
   display: (target?: string) => void;
@@ -68,15 +69,7 @@ export const BookViewer = ({
   const [epubLocations, setEpubLocations] = useState<string[]>([]);
   const epubViewerRef = useRef<HTMLDivElement>(null);
 
-  // Determina o tipo de arquivo pela extensão
-  const getFileType = () => {
-    if (fileType === 'application/pdf' || fileType === 'pdf') return 'pdf';
-    if (fileType === 'application/epub+zip' || fileType === 'epub') return 'epub';
-    if (fileType === 'application/x-mobipocket-ebook' || fileType === 'mobi') return 'mobi';
-    return fileType;
-  };
-
-  const normalizedFileType = getFileType();
+  const normalizedFileType = normalizeBookFileType(fileType);
 
   // Visualizador de PDF
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
@@ -239,22 +232,14 @@ export const BookViewer = ({
 
   if (normalizedFileType === 'mobi') {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground mb-4">
-          Arquivos MOBI não são suportados para visualização web.
+      <div className="text-center py-12 max-w-md mx-auto px-4">
+        <p className="text-muted-foreground mb-2">
+          Este livro está em formato MOBI e ainda não pode ser lido no navegador.
         </p>
-        <p className="text-sm text-muted-foreground mb-4">
-          Faça o download para ler em um leitor Kindle ou compatível.
+        <p className="text-sm text-muted-foreground">
+          A leitura na Eclipse Reads é apenas online — não oferecemos download de arquivos.
+          Escolha um título em PDF ou EPUB no catálogo.
         </p>
-        {fileUrl && (
-          <a
-            href={fileUrl}
-            download
-            className="text-primary underline hover:opacity-80 text-sm"
-          >
-            Baixar arquivo MOBI
-          </a>
-        )}
       </div>
     );
   }

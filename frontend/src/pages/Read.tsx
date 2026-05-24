@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { BookViewer, type EpubTocItem } from "@/components/BookViewer";
 import { api } from "@/lib/api";
+import { isWebReadableBookFormat } from "@/lib/bookFileValidation";
 
 interface Book {
   id: string;
@@ -58,6 +59,11 @@ const Read = () => {
           return;
         }
         setBook(data);
+        if (!isWebReadableBookFormat(data.file_type)) {
+          toast.error("Este formato não está disponível para leitura online. Escolha um livro em PDF ou EPUB.");
+          navigate(`/book/${id}`, { replace: true });
+          return;
+        }
         if (!token) {
           toastNeedLogin("Faça login para ler este livro.", navigate);
           navigate("/auth");
@@ -365,7 +371,11 @@ const Read = () => {
         </div>
       </header>
 
-      <main className="flex-1">
+      <main
+        className="flex-1"
+        onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
+      >
         <BookViewer
           fileUrl={fileUrl}
           fileType={book.file_type}

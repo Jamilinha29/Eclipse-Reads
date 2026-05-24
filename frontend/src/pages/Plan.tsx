@@ -17,7 +17,7 @@ const Plan = () => {
   const premiumFeatures = [
     "Todos os recursos",
     "Acesso a todos Temas offline",
-    "Downloads ilimitados",
+    "Leitura online ilimitada",
     "Sem anúncios",
     "Sincronização multiplataforma",
     "Estatísticas avançadas",

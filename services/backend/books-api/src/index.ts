@@ -524,10 +524,8 @@ app.get("/books/:id/file", async (req: Request, res: Response) => {
             ? "application/x-mobipocket-ebook"
             : "application/octet-stream";
 
-    const extension = fileType || "bin";
-    const safeTitle = (book.title || "book").replace(/[^a-zA-Z0-9-_]/g, "_");
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `inline; filename="${safeTitle}.${extension}"`);
+    res.setHeader("Content-Disposition", "inline");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("X-Content-Type-Options", "nosniff");
