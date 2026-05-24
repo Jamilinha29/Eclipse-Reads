@@ -1,4 +1,5 @@
-project_id = "wnaymuusxwvawmbieukm"
+# project_id é preenchido localmente por `supabase link --project-ref SEU_PROJECT_REF`.
+# Não commite o ref real do seu projeto Supabase neste arquivo.
 
 [functions.books]
 verify_jwt = true

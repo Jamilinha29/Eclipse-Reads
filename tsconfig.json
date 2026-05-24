@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./frontend" },
+    { "path": "./services/backend/auth-proxy" },
+    { "path": "./services/backend/books-api" },
+    { "path": "./services/backend/library-service" }
+  ]
+}

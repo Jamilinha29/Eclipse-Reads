@@ -1,5 +1,4 @@
 -- Eclipse Reads — schema completo do banco (referência / projeto NOVO)
--- Projeto Supabase: wnaymuusxwvawmbieukm
 -- Storage bucket `books`: pasta `livros/` (PDF/EPUB/MOBI), pasta `covers/` (capas)
 --
 -- USO:
@@ -7,7 +6,7 @@
 --   • Projeto JÁ migrado: NÃO rode de novo — use npm run db:push (migrações incrementais).
 --
 -- Migrações automáticas (CLI): services/main-service/supabase/migrations/
--- https://supabase.com/dashboard/project/wnaymuusxwvawmbieukm/sql/new
+-- SQL Editor: Supabase Dashboard → SQL (seu projeto)
 
 -- ========== 20251031212951_79e38e8a-4654-4649-836d-fbbb580fdec9.sql ==========
 -- Create profiles table for user data

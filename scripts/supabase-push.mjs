@@ -3,7 +3,7 @@
  *
  * Pré-requisitos (uma vez):
  *   1. npx supabase login
- *   2. cd services/main-service && npx supabase link --project-ref wnaymuusxwvawmbieukm
+ *   2. cd services/main-service && npx supabase link --project-ref SEU_PROJECT_REF
  *   3. npm run db:baseline   (se o banco já tinha o combined aplicado manualmente)
  */
 import { spawnSync } from "child_process";

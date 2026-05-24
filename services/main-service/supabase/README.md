@@ -1,6 +1,6 @@
 # Supabase — Eclipse Reads
 
-Projeto: **wnaymuusxwvawmbieukm**
+O **project ref** do Supabase (ex.: `abcdefghijklmnop` em `https://abcdefghijklmnop.supabase.co`) **não deve** aparecer neste repositório. Cada desenvolvedor usa o ref do próprio projeto via `supabase link` ou variável de ambiente.
 
 ## Pastas
 
@@ -16,7 +16,7 @@ npm install
 npx supabase login
 
 Set-Location services\main-service
-npx supabase link --project-ref wnaymuusxwvawmbieukm
+npx supabase link --project-ref SEU_PROJECT_REF
 Set-Location ..\..\..
 ```
 
@@ -53,6 +53,7 @@ Secrets necessários no repositório:
 |--------|------------|
 | `SUPABASE_ACCESS_TOKEN` | [Account tokens](https://supabase.com/dashboard/account/tokens) |
 | `SUPABASE_DB_PASSWORD` | Project Settings → Database |
+| `SUPABASE_PROJECT_REF` | Project Settings → General → Reference ID (20 caracteres) |
 
 A cada **push em `main`** que altere `services/main-service/supabase/migrations/**`, o CI roda `supabase db push`.
 

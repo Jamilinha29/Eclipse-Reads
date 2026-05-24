@@ -32,7 +32,7 @@ Frontend (Vite :8080)
   ├── books-api (:4000)
   ├── library-service (:4200)
   └── auth-proxy (:4100)
-Supabase: wnaymuusxwvawmbieukm
+Supabase: (project ref via env / supabase link — não versionar)
 Migrations: services/main-service/supabase/migrations/
 ```
 

@@ -8,7 +8,8 @@ Documentação dos secrets do GitHub Actions e variáveis de ambiente por ambien
 |--------|-----|-----------|
 | `CR_PAT` | `docker` | Personal Access Token com `write:packages` para GHCR |
 | `SUPABASE_ACCESS_TOKEN` | `supabase-migrate` (job em `main.yml`) | Token da CLI Supabase ([Account → Access Tokens](https://supabase.com/dashboard/account/tokens)). Se ausente, o job de migração é **ignorado** (não falha). |
-| `SUPABASE_DB_PASSWORD` | `supabase-migrate` (job em `main.yml`) | Senha do Postgres do projeto remoto. Obrigatório junto com `SUPABASE_ACCESS_TOKEN` para aplicar migrations no push. |
+| `SUPABASE_DB_PASSWORD` | `supabase-migrate` (job em `main.yml`) | Senha do Postgres do projeto remoto. Obrigatório junto com os demais secrets Supabase para aplicar migrations no push. |
+| `SUPABASE_PROJECT_REF` | `supabase-migrate` (job em `main.yml`) | Reference ID do projeto (20 caracteres). Dashboard → Project Settings → General. **Não commite no Git.** |
 | `VERCEL_TOKEN` | `deploy-frontend` | Token Vercel |
 | `VERCEL_ORG_ID` | `deploy-frontend` | ID da org/team Vercel |
 | `VERCEL_PROJECT_ID` | `deploy-frontend` | ID do projeto Vercel |
@@ -30,6 +31,10 @@ Copie de `*.env.example` e preencha:
 Opcional em todos: `ALLOWED_ORIGINS` (lista separada por vírgula) para CORS além dos defaults localhost + Vercel.
 
 ## Render — books-api (produção)
+
+**Build command (Render):** `npm install && npm run build` — `typescript` está em `dependencies` para compilar mesmo com `NODE_ENV=production`.
+
+**Node:** use **20.x** (`.node-version` em cada serviço backend).
 
 No painel do serviço **books-api** → **Environment**:
 
