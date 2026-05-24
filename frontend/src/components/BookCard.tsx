@@ -1,9 +1,11 @@
 import { Star, Heart, Eye, Check } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { useLibrary } from "@/contexts/LibraryContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { toastNeedLogin } from "@/lib/loginToast";
+import { resolveBookCoverUrl, BOOK_COVER_PLACEHOLDER } from "@/lib/coverPlaceholder";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -23,6 +25,11 @@ interface BookCardProps {
 
 const BookCard = ({ id, title, author, image, rating }: BookCardProps) => {
   const navigate = useNavigate();
+  const [coverSrc, setCoverSrc] = useState(() => resolveBookCoverUrl(image));
+
+  useEffect(() => {
+    setCoverSrc(resolveBookCoverUrl(image));
+  }, [image]);
   const {
     isInFavorites,
     isInReading,
@@ -64,9 +71,10 @@ const BookCard = ({ id, title, author, image, rating }: BookCardProps) => {
     >
       <div className="aspect-[2/3] overflow-hidden">
         <img
-          src={image}
+          src={coverSrc}
           alt={title}
           className="h-full w-full object-cover transition-smooth group-hover:scale-110"
+          onError={() => setCoverSrc(BOOK_COVER_PLACEHOLDER)}
         />
         
         <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-smooth" />

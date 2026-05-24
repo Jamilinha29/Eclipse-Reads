@@ -258,10 +258,18 @@ const AdminPanel = () => {
       toast.error("Sessão inválida");
       return null;
     }
-    const basename = storageFileBasename(bookFileName).replace(/\.[^/.]+$/, "") || "cover";
+    const basename =
+      bookFileName.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "cover";
     try {
       const { publicUrl } = await api.adminUploadCover(file, basename, token);
-      return publicUrl as string;
+      const coverUrl = publicUrl as string;
+      const existingBook = existingBooksData.get(bookFileName);
+      if (existingBook?.id) {
+        await api.adminUpdateBook(existingBook.id, { cover_image: coverUrl }, token);
+        await loadExistingBooks();
+        toast.success("Capa salva no catálogo");
+      }
+      return coverUrl;
     } catch (e) {
       toast.error("Erro ao fazer upload da capa");
       console.error(e);
@@ -303,6 +311,9 @@ const AdminPanel = () => {
         );
         toast.success(`Livro "${form.title}" atualizado com sucesso!`);
       } else {
+        if (!form.cover_image?.trim()) {
+          toast.warning("Importando sem capa — envie a imagem antes ou atualize depois no painel.");
+        }
         const releaseYear = form.release_year ? parseInt(form.release_year, 10) : new Date().getFullYear();
         await api.adminImportBook(
           {
@@ -663,6 +674,11 @@ const AdminPanel = () => {
                                   <Upload className="h-4 w-4 mr-2" />
                                   {isAlreadyImported ? 'Salvar Alterações' : 'Adicionar à Biblioteca'}
                                 </Button>
+                                {isAlreadyImported && !form.cover_image && (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                                    Este livro ainda não tem capa no catálogo. Envie a imagem acima — ela será salva automaticamente.
+                                  </p>
+                                )}
                               </div>
                             )}
                           </div>

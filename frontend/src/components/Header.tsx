@@ -13,6 +13,7 @@ import logo from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useState, useEffect } from "react";
+import { resolveBookCoverUrl, BOOK_COVER_PLACEHOLDER } from "@/lib/coverPlaceholder";
 import { api } from "@/lib/api";
 
 const Header = () => {
@@ -118,13 +119,15 @@ const Header = () => {
                       onClick={() => navigate(`/book/${book.id}`)}
                     >
                       <div className="flex gap-3 items-center w-full">
-                        {book.cover_image ? (
-                          <img src={book.cover_image} alt={book.title} className="h-10 w-8 object-cover rounded shadow-sm" />
-                        ) : (
-                          <div className="h-10 w-8 bg-muted rounded flex items-center justify-center">
-                            <BookOpen className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        )}
+                        <img
+                          src={resolveBookCoverUrl(book.cover_image)}
+                          alt={book.title}
+                          className="h-10 w-8 object-cover rounded shadow-sm"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = BOOK_COVER_PLACEHOLDER;
+                          }}
+                        />
                         <div className="flex-1 overflow-hidden">
                           <p className="font-semibold text-sm truncate">{book.title}</p>
                           <p className="text-xs text-muted-foreground truncate">{book.author}</p>

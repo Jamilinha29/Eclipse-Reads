@@ -29,6 +29,25 @@ Copie de `*.env.example` e preencha:
 
 Opcional em todos: `ALLOWED_ORIGINS` (lista separada por vírgula) para CORS além dos defaults localhost + Vercel.
 
+## Render — books-api (produção)
+
+No painel do serviço **books-api** → **Environment**:
+
+| Variável | Obrigatório | Descrição |
+|----------|-------------|-----------|
+| `SUPABASE_URL` | Sim | URL do projeto Supabase |
+| `SUPABASE_ANON_KEY` | Sim | Chave anon/public |
+| `SUPABASE_SERVICE_KEY` | Sim | Service role key |
+| `FILE_ACCESS_SECRET` | Sim | Segredo aleatório (32+ bytes hex). Sem isso o serviço **não inicia** em produção. |
+
+Gerar valor:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Teste após deploy: `curl https://SEU-SERVICO.onrender.com/health`
+
 ## Supabase remoto — manual
 
 | Ação | Onde |

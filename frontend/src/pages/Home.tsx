@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { getFallbackDailyQuote } from "@/lib/dailyQuoteFallback";
 import { logCatalogError } from "@/lib/catalogLoad";
+import { resolveBookCoverUrl } from "@/lib/coverPlaceholder";
 
 interface Quote {
   id: string;
@@ -132,7 +133,7 @@ const Home = () => {
                 id={book.id}
                 title={book.title}
                 author={book.author}
-                image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
+                image={resolveBookCoverUrl(book.cover_image)}
                 rating={book.rating}
               />
             ))}
@@ -163,7 +164,7 @@ const Home = () => {
                 id={book.id}
                 title={book.title}
                 author={book.author}
-                image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
+                image={resolveBookCoverUrl(book.cover_image)}
                 rating={book.rating}
               />
             ))}

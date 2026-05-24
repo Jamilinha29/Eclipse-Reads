@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCatalogBooks } from "@/hooks/useCatalogBooks";
+import { resolveBookCoverUrl } from "@/lib/coverPlaceholder";
 
 const PAGE_SIZE = 24;
 
@@ -152,7 +153,7 @@ const Search = () => {
                 id={book.id}
                 title={book.title}
                 author={book.author}
-                image={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
+                image={resolveBookCoverUrl(book.cover_image)}
                 rating={book.rating}
               />
             ))

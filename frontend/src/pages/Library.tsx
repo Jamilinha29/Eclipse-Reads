@@ -8,9 +8,7 @@ import BookCard from "@/components/BookCard";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/lib/api";
-
-const PLACEHOLDER_COVER =
-  "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop";
+import { resolveBookCoverUrl } from "@/lib/coverPlaceholder";
 
 const Library = () => {
   const [activeTab, setActiveTab] = useState<"favoritos" | "lendo" | "lidos">("favoritos");
@@ -160,7 +158,7 @@ const Library = () => {
                 id={book.id}
                 title={book.title}
                 author={book.author}
-                image={book.cover_image || PLACEHOLDER_COVER}
+                image={resolveBookCoverUrl(book.cover_image)}
                 rating={book.rating ?? 0}
               />
             ))}

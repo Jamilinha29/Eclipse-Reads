@@ -10,6 +10,7 @@ import { toastNeedLogin } from "@/lib/loginToast";
 import { useState, useEffect } from "react";
 import { ReviewSection } from "@/components/ReviewSection";
 import { api } from "@/lib/api";
+import { BOOK_COVER_PLACEHOLDER, resolveBookCoverUrl } from "@/lib/coverPlaceholder";
 
 interface Book {
   id: string;
@@ -26,6 +27,7 @@ const BookDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [book, setBook] = useState<Book | null>(null);
+  const [coverSrc, setCoverSrc] = useState(BOOK_COVER_PLACEHOLDER);
   const [loading, setLoading] = useState(true);
   const {
     isInFavorites,
@@ -47,6 +49,7 @@ const BookDetail = () => {
           toast.error("Livro não encontrado");
         } else {
           setBook(data);
+          setCoverSrc(resolveBookCoverUrl(data.cover_image));
         }
       } catch (error) {
         console.error("Error loading book:", error);
@@ -139,9 +142,10 @@ const BookDetail = () => {
           <div>
             <Card className="overflow-hidden p-0">
               <img
-                src={book.cover_image || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"}
+                src={coverSrc}
                 alt={book.title}
                 className="w-full aspect-[2/3] object-cover"
+                onError={() => setCoverSrc(BOOK_COVER_PLACEHOLDER)}
               />
             </Card>
           </div>
