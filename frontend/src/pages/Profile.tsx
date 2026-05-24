@@ -442,15 +442,15 @@ const Profile = () => {
         )}
 
         {isAdmin && (
-          <Card className="p-6 mb-6 bg-gradient-primary text-primary-foreground border-0">
+          <Card className="p-6 mb-6 bg-secondary border-border">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-background/20 p-3">
-                  <Shield className="h-6 w-6" />
+                <div className="rounded-full bg-primary/20 p-3">
+                  <Shield className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold mb-1">Painel Administrativo</h3>
-                  <p className="text-sm opacity-90">
+                  <p className="text-sm text-muted-foreground">
                     Gerencie livros, submissões e configurações da plataforma
                   </p>
                 </div>
@@ -458,7 +458,6 @@ const Profile = () => {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button 
-                  variant="secondary"
                   className="gap-2 justify-start"
                   onClick={() => window.location.href = '/admin'}
                 >
@@ -467,7 +466,7 @@ const Profile = () => {
                 </Button>
                 <Button 
                   variant="outline"
-                  className="gap-2 justify-start bg-background/10 border-background/20 hover:bg-background/20"
+                  className="gap-2 justify-start"
                   onClick={() => window.location.href = '/admin?tab=import'}
                 >
                   <Upload className="h-4 w-4" />
@@ -475,18 +474,16 @@ const Profile = () => {
                 </Button>
               </div>
 
-              <div className="pt-4 border-t border-background/10 space-y-3">
+              <div className="pt-4 border-t border-border space-y-3">
                 <h4 className="font-bold text-sm">Criar Nova Conquista</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <Input 
                     placeholder="Título da conquista" 
-                    className="bg-background text-foreground"
                     value={newAchTitle}
                     onChange={(e) => setNewAchTitle(e.target.value)}
                   />
                   <Input 
                     placeholder="Descrição (opcional)" 
-                    className="bg-background text-foreground"
                     value={newAchDesc}
                     onChange={(e) => setNewAchDesc(e.target.value)}
                   />
@@ -498,9 +495,9 @@ const Profile = () => {
               </div>
               
               {adminStatsData.pendingSubmissions > 0 && (
-                <div className="bg-background/10 rounded-lg p-3 border border-background/20">
+                <div className="bg-muted rounded-lg p-3 border border-border">
                   <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4" />
+                    <Clock className="h-4 w-4 text-primary" />
                     <span className="font-semibold">
                       {adminStatsData.pendingSubmissions} {adminStatsData.pendingSubmissions === 1 ? 'submissão pendente' : 'submissões pendentes'}
                     </span>
