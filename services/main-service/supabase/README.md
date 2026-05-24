@@ -45,7 +45,7 @@ npm run audit:supabase
 
 ## CI automático (GitHub)
 
-Workflow: `.github/workflows/supabase-migrate.yml`
+Job `supabase-migrate` em `.github/workflows/main.yml` (roda antes do deploy em push para `main`).
 
 Secrets necessários no repositório:
 

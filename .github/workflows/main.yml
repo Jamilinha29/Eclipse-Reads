@@ -43,19 +43,13 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
+        run: npm ci
 
       - name: Lint frontend
-        run: |
-          cd frontend
-          npm run lint
+        run: npm run lint --workspace=frontend
 
       - name: TypeScript check (frontend)
-        run: |
-          cd frontend
-          npx tsc -p tsconfig.app.json --noEmit
+        run: npx tsc -p frontend/tsconfig.app.json --noEmit
 
       - name: Build frontend
         env:
@@ -63,9 +57,7 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-anon-key
           VITE_BOOKS_API_URL: http://localhost:4000
           VITE_LIBRARY_API_URL: http://localhost:4200
-        run: |
-          cd frontend
-          npm run build
+        run: npm run build --workspace=frontend
 
 #BACKEND TESTS
   backend:
@@ -90,11 +82,72 @@ jobs:
           cd services/backend/${{ matrix.service }}
           npm run build
 
- #DOCKER BUILD AND PUSH
-  build-and-push-docker-images:
+#SUPABASE MIGRATIONS (before deploy)
+  supabase-migrate:
     runs-on: ubuntu-latest
-    needs: [frontend, backend, root-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check secrets
+        id: secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "Secrets SUPABASE_ACCESS_TOKEN / SUPABASE_DB_PASSWORD ausentes — migração ignorada."
+          fi
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          filters: |
+            migrations:
+              - 'services/main-service/supabase/migrations/**'
+
+      - uses: supabase/setup-cli@v1
+        if: steps.secrets.outputs.ready == 'true' && steps.changes.outputs.migrations == 'true'
+        with:
+          version: 2.101.0
+
+      - name: Link Supabase project
+        if: steps.secrets.outputs.ready == 'true' && steps.changes.outputs.migrations == 'true'
+        working-directory: services/main-service
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref wnaymuusxwvawmbieukm --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Push pending migrations
+        if: steps.secrets.outputs.ready == 'true' && steps.changes.outputs.migrations == 'true'
+        working-directory: services/main-service
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push
+
+      - name: Migration list (log)
+        if: steps.secrets.outputs.ready == 'true' && steps.changes.outputs.migrations == 'true'
+        working-directory: services/main-service
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list
+
+#DOCKER BUILD AND PUSH
+  docker:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend, root-tests, supabase-migrate]
+    if: |
+      always() &&
+      needs.frontend.result == 'success' &&
+      needs.backend.result == 'success' &&
+      needs.root-tests.result == 'success' &&
+      (needs.supabase-migrate.result == 'success' || needs.supabase-migrate.result == 'skipped') &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v6
@@ -140,8 +193,14 @@ jobs:
 #DEPLOY FRONTEND
   deploy-frontend:
     runs-on: ubuntu-latest
-    needs: [frontend, backend, root-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [frontend, backend, root-tests, supabase-migrate]
+    if: |
+      always() &&
+      needs.frontend.result == 'success' &&
+      needs.backend.result == 'success' &&
+      needs.root-tests.result == 'success' &&
+      (needs.supabase-migrate.result == 'success' || needs.supabase-migrate.result == 'skipped') &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v6

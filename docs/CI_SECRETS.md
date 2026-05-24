@@ -6,9 +6,9 @@ Documentação dos secrets do GitHub Actions e variáveis de ambiente por ambien
 
 | Secret | Job | Descrição |
 |--------|-----|-----------|
-| `CR_PAT` | `build-and-push-docker-images` | Personal Access Token com `write:packages` para GHCR |
-| `SUPABASE_ACCESS_TOKEN` | `supabase-migrate` | Token da CLI Supabase ([Account → Access Tokens](https://supabase.com/dashboard/account/tokens)) |
-| `SUPABASE_DB_PASSWORD` | `supabase-migrate` | Senha do Postgres do projeto remoto |
+| `CR_PAT` | `docker` | Personal Access Token com `write:packages` para GHCR |
+| `SUPABASE_ACCESS_TOKEN` | `supabase-migrate` (job em `main.yml`) | Token da CLI Supabase ([Account → Access Tokens](https://supabase.com/dashboard/account/tokens)). Se ausente, o job de migração é **ignorado** (não falha). |
+| `SUPABASE_DB_PASSWORD` | `supabase-migrate` (job em `main.yml`) | Senha do Postgres do projeto remoto. Obrigatório junto com `SUPABASE_ACCESS_TOKEN` para aplicar migrations no push. |
 | `VERCEL_TOKEN` | `deploy-frontend` | Token Vercel |
 | `VERCEL_ORG_ID` | `deploy-frontend` | ID da org/team Vercel |
 | `VERCEL_PROJECT_ID` | `deploy-frontend` | ID do projeto Vercel |
@@ -37,6 +37,17 @@ Opcional em todos: `ALLOWED_ORIGINS` (lista separada por vírgula) para CORS al�
 | Google OAuth | Authentication → Providers |
 | Admin inicial | SQL: `INSERT INTO user_roles (user_id, role) VALUES ('…', 'admin');` |
 | Importar livros do Storage | Painel Admin → Importar (18 arquivos em `livros/` sem registro em `books`) |
+
+## CI — lock file (`npm ci`)
+
+O repositório usa **npm workspaces** (lock único na raiz). Após alterar `package.json` em qualquer workspace:
+
+```powershell
+npm install
+git add package-lock.json
+```
+
+Não commite só `package.json` sem atualizar o `package-lock.json` — o CI roda `npm ci` e falha se estiverem dessincronizados.
 
 ## Comandos úteis
 
