@@ -197,6 +197,10 @@ jobs:
 #DEPLOY FRONTEND
   deploy-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: vercel-deploy-${{ github.ref }}
+      cancel-in-progress: true
     needs: [frontend, backend, root-tests, supabase-migrate]
     if: |
       always() &&
@@ -239,7 +243,7 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --prebuilt --prod --yes --no-wait --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: frontend
 
   e2e-playwright:
