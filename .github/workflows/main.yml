@@ -226,7 +226,6 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: frontend
 
       - name: Build with Vercel CLI (prebuilt, D-08)
         env:
@@ -237,14 +236,23 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: frontend
+
+      - name: Verify prebuilt output
+        run: |
+          if [ ! -d .vercel/output/static ]; then
+            echo "Erro: .vercel/output/static ausente — vercel build não gerou artefatos."
+            ls -laR .vercel/output 2>/dev/null || ls -la .vercel 2>/dev/null || true
+            exit 1
+          fi
+          echo "Artefatos prebuilt:"
+          du -sh .vercel/output
+          find .vercel/output -type f | wc -l
 
       - name: Deploy prebuilt to Vercel
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel deploy --prebuilt --prod --yes --no-wait --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: frontend
+        run: npx vercel deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
 
   e2e-playwright:
     runs-on: ubuntu-latest
