@@ -24,7 +24,7 @@
     "baseUrl": "src",
     "paths": {
       "@/*": ["*"],
-      "@eclipse-reads/shared": ["../services/backend/shared/src/index.ts"]
+      "@eclipse-reads/shared": ["../../services/backend/shared/src/index.ts"]
     },
     "allowJs": true,
     "strictNullChecks": true,
