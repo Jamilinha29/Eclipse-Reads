@@ -15,9 +15,11 @@ import express, { NextFunction, Request, Response, type RequestHandler } from "e
 import cors from "cors";
 import morgan from "morgan";
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 import { Readable } from "stream";
 import multer from "multer";
 import { createHmac, timingSafeEqual } from "crypto";
+import { DEFAULT_BOOKS_SUBMISSION_MAX_BYTES, validateBookFileBytes } from "@eclipse-reads/shared";
 
 const app = express();
 app.disable("x-powered-by");
@@ -101,9 +103,12 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 }
 
 /** Limite POST /submissions — override em testes com `BOOKS_SUBMISSION_MAX_BYTES` (bytes). */
-const BOOKS_SUBMISSION_MAX_BYTES = parsePositiveIntEnv("BOOKS_SUBMISSION_MAX_BYTES", 50 * 1024 * 1024);
+const BOOKS_SUBMISSION_MAX_BYTES = parsePositiveIntEnv("BOOKS_SUBMISSION_MAX_BYTES", DEFAULT_BOOKS_SUBMISSION_MAX_BYTES);
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+/** Node 20 (Docker): Realtime exige `ws` como transport explícito. */
+const supabaseWsOptions = { realtime: { transport: ws } } as NonNullable<Parameters<typeof createClient>[2]>;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, supabaseWsOptions);
 
 const AGE_RATINGS = new Set(["Livre", "10+", "12+", "14+", "16+", "18+"]);
 
@@ -306,19 +311,7 @@ const uploadCover = multer({
 });
 
 function validateBookFileBuffer(buffer: Buffer, ext: string): boolean {
-  if (!buffer?.length) return false;
-  if (ext === "pdf") {
-    return buffer.slice(0, 5).toString("ascii") === "%PDF-";
-  }
-  if (ext === "epub") {
-    return buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
-  }
-  if (ext === "mobi") {
-    const bookHead = buffer.slice(0, 4).toString("ascii");
-    const mobiHead = buffer.slice(60, 64).toString("ascii");
-    return bookHead === "BOOK" || mobiHead.includes("MOBI");
-  }
-  return false;
+  return validateBookFileBytes(new Uint8Array(buffer), ext);
 }
 
 async function requireUser(req: Request): Promise<{ id: string; email?: string | null }> {
@@ -329,6 +322,7 @@ async function requireUser(req: Request): Promise<{ id: string; email?: string |
   const clientWithAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    ...supabaseWsOptions,
   });
 
   const { data, error } = await clientWithAuth.auth.getUser();

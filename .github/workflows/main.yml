@@ -179,7 +179,7 @@ jobs:
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/books-api:latest"
           IMAGE_LOWER=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')
-          docker build $DOCKER_NO_CACHE -t $IMAGE_LOWER ./services/backend/books-api
+          docker build $DOCKER_NO_CACHE -f books-api/Dockerfile -t $IMAGE_LOWER ./services/backend
           docker push $IMAGE_LOWER
 
       - name: Build & Push Auth Proxy

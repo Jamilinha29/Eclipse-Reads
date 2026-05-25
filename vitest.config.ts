@@ -10,6 +10,7 @@ export default defineConfig({
       // Serviços em services/backend/*/node_modules não são interceptados por vi.mock.
       "@supabase/supabase-js": path.join(root, "tests/mocks/supabase-js-test-shim.ts"),
       "@": path.join(root, "frontend/src"),
+      "@eclipse-reads/shared": path.join(root, "services/backend/shared/src/index.ts"),
     },
   },
   test: {

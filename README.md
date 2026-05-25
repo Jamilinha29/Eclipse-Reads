@@ -1,127 +1,200 @@
 # Eclipse Reads
 
-![CI status](https://github.com/Jamilinha29/Eclipse-Reads/actions/workflows/main.yml/badge.svg)
+> Plataforma web para **descoberta, leitura e gestão de livros digitais** — frontend React, microserviços Node/Express e persistência no **Supabase**.
 
-Plataforma web para **descoberta, leitura e gestão de livros digitais**, com frontend React, microserviços Node/Express e persistência no **Supabase** (auth, banco e storage).
+---
 
-## Apresentação e Contexto
+## Índice
 
-Com o crescimento de bibliotecas digitais e submissões de obras por leitores, falta uma experiência unificada para explorar catálogo, ler online, organizar a biblioteca pessoal e moderar conteúdo. O Eclipse Reads centraliza autenticação, catálogo, progresso de leitura e perfil do usuário em uma interface responsiva, apoiada por APIs especializadas e testes automatizados.
+1. [Sobre o projeto](#sobre-o-projeto)
+2. [Funcionalidades](#funcionalidades)
+3. [Tecnologias](#tecnologias)
+4. [Arquitetura](#arquitetura)
+5. [Estrutura do projeto](#estrutura-do-projeto)
+6. [Pré-requisitos](#pré-requisitos)
+7. [Instalação](#instalação)
+8. [Configuração de ambiente](#configuração-de-ambiente)
+9. [Execução](#execução)
+10. [Testes](#testes)
+11. [Deploy](#deploy)
+12. [Solução de problemas](#solução-de-problemas)
+13. [Contribuição](#contribuição)
+14. [Autor](#autor)
+15. [Links úteis](#links-úteis)
 
-### O que o projeto entrega
+---
 
-- Autenticação por e-mail/senha e fluxos Supabase (recuperação de senha, callback OAuth).
-- Catálogo com busca, detalhes, resenhas e frase do dia.
-- Submissão de livros (PDF/EPUB/MOBI) com validação e moderação administrativa.
-- Leitor integrado com progresso de leitura e ajustes de leitura.
-- Biblioteca pessoal (lendo, lidos, quero ler) e metas/estatísticas.
-- Perfil, tema, mídia de avatar e configurações via **library-service**.
-- Painel admin para aprovar/rejeitar submissões e gerenciar storage.
-- CI com Vitest (contratos de API, auth, upload, perfil) e suporte a K6/Playwright/Docker.
-- Deploy na Vercel: SPA + função serverless do **auth-proxy** (`/api/auth/*`).
+## Sobre o projeto
 
-## Arquitetura e Tecnologias
+**Eclipse Reads** centraliza o acesso a livros digitais gratuitos e de domínio público em uma interface moderna e responsiva. O projeto resolve a dispersão de fontes na web — quando o leitor precisa consultar vários sites e formatos — reunindo catálogo, leitura online, biblioteca pessoal e moderação de conteúdo em um único ambiente acessível pelo navegador.
 
-| Camada | Tecnologias |
-|---|---|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS, shadcn-ui, Radix UI |
-| Estado / dados | `@tanstack/react-query`, `react-router-dom`, `react-hook-form`, `zod` |
-| Backends | Node.js 20, Express, TypeScript (`tsx`), multer, CORS |
-| Auth / dados | Supabase (`@supabase/supabase-js`) — Auth, PostgREST, Storage |
-| Testes | Vitest, Supertest, Playwright (opt-in), K6 (carga) |
-| Monorepo | npm workspaces (`frontend`, `auth-proxy`, `books-api`, `library-service`) |
-| Deploy | Vercel (`vercel.json` na raiz), `api/auth.ts` serverless |
+A solução integra autenticação (e-mail, Google OAuth e modo convidado), busca e leitura de obras (PDF/EPUB), listas e progresso sincronizados na nuvem, submissão de livros com validação e painel administrativo, apoiada por APIs especializadas e testes automatizados.
 
-### Serviços e portas (desenvolvimento local)
+---
 
-| Serviço | Pasta | Porta padrão | Responsabilidade |
-|---|---|---:|---|
+## Funcionalidades
+
+| Recurso | Descrição |
+|---------|-----------|
+| **Catálogo** | Busca por título, autor ou categoria; detalhes, resenhas e frase do dia |
+| **Leitura online** | Visualizador PDF/EPUB com progresso salvo (`/read/:id`) |
+| **Biblioteca pessoal** | Listas *lendo*, *lidos*, *quero ler*, favoritos e metas |
+| **Autenticação** | E-mail/senha, Google (OAuth), recuperação de senha e modo convidado |
+| **Submissão de obras** | Upload PDF/EPUB/MOBI com validação de magic bytes e moderação admin |
+| **Perfil** | Avatar, tema, estatísticas e configurações |
+| **Admin** | Aprovar/rejeitar submissões e gerenciar storage (`/admin`) |
+| **CI / qualidade** | Vitest (API, auth, upload, perfil), K6, Playwright e Docker |
+
+---
+
+## Tecnologias
+
+### Frontend
+
+- React 18, TypeScript, Vite
+- Tailwind CSS, shadcn-ui, Radix UI
+- `@tanstack/react-query`, `react-router-dom`, `react-hook-form`, `zod`
+
+### Backend
+
+- Node.js 20, Express, TypeScript (`tsx`)
+- Microserviços: `books-api`, `auth-proxy`, `library-service`
+- Pacote compartilhado: `@eclipse-reads/shared`
+
+### Dados e infraestrutura
+
+- **Supabase** — Auth, PostgreSQL (PostgREST), Storage
+- **Monorepo** — npm workspaces
+- **Deploy** — Vercel (SPA + `api/auth.ts` serverless); backends em host dedicado (ex.: Render)
+
+### Testes e DevOps
+
+- Vitest, Supertest, Playwright (opt-in), K6 (carga)
+- Docker Compose (backends e suíte de testes)
+- GitHub Actions (`.github/workflows/main.yml`)
+
+---
+
+## Arquitetura
+
+Monorepo com frontend React consumindo três microserviços Express; autenticação, banco e arquivos ficam no **Supabase**.
+
+```
+                    ┌─────────────────────────────────┐
+                    │   Frontend (React + Vite :8080) │
+                    └───────────────┬─────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          ▼                         ▼                         ▼
+   books-api (:4000)          auth-proxy (:4100)      library-service (:4200)
+   catálogo · submissões     login · signup ·        biblioteca · perfil
+   reviews · admin           validate · refresh      progresso · settings
+          │                         │                         │
+          └─────────────────────────┼─────────────────────────┘
+                                    ▼
+                    ┌─────────────────────────────────┐
+                    │  Supabase (Auth · DB · Storage) │
+                    └─────────────────────────────────┘
+
+@eclipse-reads/shared — validação de upload (PDF/EPUB/MOBI) e limites de tamanho
+```
+
+| Serviço | Pasta | Porta | Responsabilidade |
+|---------|-------|------:|------------------|
 | Frontend (Vite) | `frontend/` | 8080 | UI, rotas, cliente Supabase |
-| books-api | `services/backend/books-api/` | 4000 | Catálogo, submissões, reviews, admin de livros |
+| books-api | `services/backend/books-api/` | 4000 | Catálogo, submissões, reviews, admin |
 | auth-proxy | `services/backend/auth-proxy/` | 4100 | Login, cadastro, validação de token |
 | library-service | `services/backend/library-service/` | 4200 | Biblioteca, perfil, tema, metas, progresso |
 
-## Estrutura do Projeto
+**Produção:** frontend na Vercel; `books-api` e `library-service` em host com HTTPS e CORS; auth via Supabase no browser e `/api/auth/*` serverless.
+
+---
+
+## Estrutura do projeto
 
 ```text
 Eclipse-Reads/
-├── api/
-│   ├── auth.ts                 # Entrada serverless Vercel (auth-proxy)
-│   └── books.ts                # Entrada opcional books-api na Vercel
+├── api/                              # Entradas serverless Vercel
+│   ├── auth.ts                       # Auth-proxy (/api/auth/*)
+│   ├── books.ts                      # Entrada opcional books-api
+│   └── library.ts                    # Entrada opcional library-service
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/              # Home, Library, Read, Admin, Auth, ...
-│   │   ├── components/
-│   │   ├── contexts/
-│   │   └── lib/                # api.ts, apiBases.ts, políticas de senha
+│   │   ├── pages/                    # Home, Library, Read, Admin, Auth, ...
+│   │   ├── components/               # UI, BookViewer, rotas protegidas
+│   │   ├── contexts/                 # Auth, Library, Notification
+│   │   ├── lib/                      # api.ts, validação, políticas
+│   │   └── hooks/
 │   ├── .env.example
-│   ├── package.json
-│   └── vite.config.ts
+│   ├── vite.config.ts
+│   └── package.json
 ├── services/
 │   ├── backend/
-│   │   ├── auth-proxy/
-│   │   ├── books-api/
-│   │   ├── library-service/
-│   │   ├── docker-compose.yml
-│   │   └── envs/               # *.env locais (gitignored)
-│   └── main-service/
-│       └── supabase/
-│           ├── bootstrap/all_migrations_combined.sql   # projeto NOVO (manual)
-│           └── migrations/                           # incrementais (npm run db:push)
-│           └── functions/
+│   │   ├── auth-proxy/               # Microserviço de autenticação
+│   │   ├── books-api/                # Catálogo e submissões
+│   │   ├── library-service/          # Biblioteca e perfil
+│   │   ├── shared/                   # @eclipse-reads/shared
+│   │   ├── envs/                     # *.env locais (gitignored)
+│   │   └── docker-compose.yml
+│   ├── main-service/
+│   │   └── supabase/
+│   │       ├── bootstrap/            # SQL completo (projeto novo)
+│   │       ├── migrations/           # Incrementais (npm run db:push)
+│   │       └── functions/
+│   └── README.md                     # Manual dos backends
 ├── tests/
-│   ├── api/
-│   ├── auth/
-│   ├── cadastro/
-│   ├── upload/
-│   ├── perfil/
-│   ├── users/
-│   ├── load/                   # Scripts K6
-│   └── README.md
+│   ├── api/                          # Contratos HTTP
+│   ├── auth/                         # Login, validate, guest
+│   ├── cadastro/                     # Regras de senha e cadastro
+│   ├── upload/                       # Limites e formatos
+│   ├── perfil/                       # Avatar e mídia
+│   ├── users/                        # Validação de username
+│   ├── load/                         # Scripts K6
+│   └── README.md                     # Manual de testes
 ├── scripts/
-│   ├── dev-all.mjs
+│   ├── dev-all.mjs                   # Sobe todos os serviços em dev
 │   └── run-tests-sequential.mjs
-├── .github/workflows/main.yml
-├── package.json                # Workspaces + scripts de teste
+├── e2e/                              # Playwright (opt-in)
+├── .github/workflows/main.yml        # CI
+├── package.json                      # Workspaces + scripts raiz
 ├── vercel.json
 ├── vitest.config.ts
-├── VERCEL_DEPLOY.md
+├── docker-compose.tests.yml
 └── README.md
 ```
 
-## Guia de Início Rápido
+---
 
-### Referência rápida — CMD vs PowerShell
-
-| Ação | CMD | PowerShell |
-|------|-----|------------|
-| Entrar em pasta | `cd /d C:\pasta` | `Set-Location C:\pasta` |
-| Instalar deps (raiz) | `npm install` | `npm.cmd install` |
-| Instalar deps (frontend) | `cd frontend` + `npm install` | `Set-Location frontend` + `npm.cmd install` |
-| Copiar arquivo | `copy origem destino` | `Copy-Item origem destino` |
-| Continuar linha | `^` no fim da linha | `` ` `` no fim da linha |
-
-### 1) Pré-requisitos
+## Pré-requisitos
 
 - **Node.js 20.x** (obrigatório — ver `engines` no `package.json`)
-- **npm** (vem com o Node)
+- **npm** (incluso no Node)
 - Projeto **Supabase** (URL, chave anon e service role para backends)
-- (Opcional) **Docker** para testes em container ou backends via Compose
-- (Opcional) **k6** e **Playwright** para carga e E2E
+- **(Opcional)** Docker Desktop — backends em container ou testes em container
+- **(Opcional)** k6 e Playwright — carga e E2E
 
-### 2) Instalação
+### Referência por terminal
 
-> Use **apenas** o bloco do terminal que você abriu. Não misture sintaxe de CMD com PowerShell.
+Use **apenas** o bloco do terminal que você abriu. Comandos `npm` abaixo funcionam em CMD, PowerShell e bash.
 
-**CMD (Prompt de Comando)**
+| Ação | CMD | PowerShell | bash / Linux / macOS |
+|------|-----|------------|----------------------|
+| Entrar em pasta | `cd services\backend` | `Set-Location services\backend` | `cd services/backend` |
+| Copiar arquivo | `copy origem destino` | `Copy-Item origem destino` | `cp origem destino` |
+| npm | `npm install` | `npm install` (ou `npm.cmd` se bloqueado) | `npm install` |
+| Health check | `curl http://localhost:4000/health` | `Invoke-RestMethod http://localhost:4000/health` | `curl http://localhost:4000/health` |
+
+---
+
+## Instalação
+
+**CMD**
 
 ```cmd
 git clone https://github.com/Jamilinha29/Eclipse-Reads.git
 cd Eclipse-Reads
 npm install
-cd frontend
-npm install
-cd ..
+npm run install:all
 ```
 
 **PowerShell**
@@ -129,270 +202,162 @@ cd ..
 ```powershell
 git clone https://github.com/Jamilinha29/Eclipse-Reads.git
 Set-Location Eclipse-Reads
-npm.cmd install
-Set-Location frontend
-npm.cmd install
-Set-Location ..
+npm install
+npm run install:all
 ```
 
-**Linux/macOS**
+**bash / Linux / macOS**
 
 ```bash
 git clone https://github.com/Jamilinha29/Eclipse-Reads.git
 cd Eclipse-Reads
 npm install
-cd frontend && npm install && cd ..
-```
-
-Instalação alternativa (todos os workspaces da raiz):
-
-```bash
-npm install
 npm run install:all
 ```
 
-### 3) Configuração
+---
 
-#### Frontend — `frontend/.env`
+## Configuração de ambiente
 
-Se você **já tem** `frontend/.env`, mantenha o arquivo atual.
+### Frontend — `frontend/.env`
 
-Se **não tem**, copie o template:
-
-**CMD (na raiz do projeto):**
-
-```cmd
-copy frontend\.env.example frontend\.env
-```
-
-**PowerShell:**
-
-```powershell
-Copy-Item frontend\.env.example frontend\.env
-```
-
-Edite `frontend/.env` (valores mínimos para desenvolvimento local):
+| Terminal | Comando |
+|----------|---------|
+| CMD | `copy frontend\.env.example frontend\.env` |
+| PowerShell | `Copy-Item frontend\.env.example frontend\.env` |
+| bash | `cp frontend/.env.example frontend/.env` |
 
 ```env
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=SUA_CHAVE_ANON_PUBLICA
-
-# URLs diretas dos microserviços (recomendado em dev — o Vite não faz proxy de /api/*)
 VITE_BOOKS_API_URL=http://localhost:4000
 VITE_LIBRARY_API_URL=http://localhost:4200
-
-# Opcional: mesma origem para os dois backends
-# VITE_API_URL=http://localhost:4000
 ```
 
-Sem `VITE_SUPABASE_*`, o app falha ao iniciar o cliente Supabase. Sem URLs dos backends em produção, o bundle abre mas as chamadas HTTP não encontram os serviços.
+Sem `VITE_SUPABASE_*`, o app não inicia o cliente Supabase. Em produção, as URLs dos backends devem apontar para hosts públicos com HTTPS.
 
-#### Backends — `services/backend/envs/*.env`
+### Backends — `services/backend/envs/*.env`
 
-Crie arquivos locais (não versionados) em `services/backend/envs/`:
+Entre em `services/backend/envs/` e copie os três templates (`auth-proxy`, `books-api`, `library-service`) para arquivos `.env` sem o sufixo `.example`.
 
-**`books-api.env` e `library-service.env`** (mesmas chaves Supabase):
+Preencha URL e chaves Supabase em cada arquivo. Guia detalhado: [services/backend/envs/README.md](services/backend/envs/README.md).
 
-```env
-SUPABASE_URL=https://SEU-PROJETO.supabase.co
-SUPABASE_ANON_KEY=SUA_CHAVE_ANON_PUBLICA
-SUPABASE_SERVICE_KEY=SUA_SERVICE_ROLE_KEY
-PORT=4000
+**`books-api.env`** — inclua `FILE_ACCESS_SECRET` (obrigatório em produção):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Para `library-service.env`, use `PORT=4200`.
+> A **service role** fica somente nos backends. Nunca exponha no frontend nem em variáveis `VITE_*`.
 
-**`auth-proxy.env`:**
+### Banco de dados (Supabase)
 
-```env
-SUPABASE_URL=https://SEU-PROJETO.supabase.co
-SUPABASE_ANON_KEY=SUA_CHAVE_ANON_PUBLICA
-PORT=4100
-```
+| Cenário | Ação |
+|---------|------|
+| Projeto novo | SQL Editor → `services/main-service/supabase/bootstrap/all_migrations_combined.sql` |
+| Migrations incrementais | `npm run db:push` na raiz |
 
-> A **service role** fica somente nos backends. Nunca exponha no frontend.
+---
 
-Schema do banco:
-- **Projeto novo (vazio):** `services/main-service/supabase/bootstrap/all_migrations_combined.sql` (SQL Editor, uma vez).
-- **Alterações incrementais:** `services/main-service/supabase/migrations/` → `npm run db:push` (ver `services/main-service/supabase/README.md`).
+## Execução
 
-### 4) Executar
+### Opção A — Tudo junto (recomendado)
 
-> **CMD:** barras `\`, `npm`, `cd /d`.  
-> **PowerShell:** `npm.cmd`, `Set-Location`.
-
-#### Opção A — Um comando (vários serviços)
-
-Na raiz, com variáveis e `envs/` configurados:
-
-**CMD / PowerShell / bash:**
+Na raiz, com `.env` e `envs/` configurados:
 
 ```bash
 npm run dev:all
 ```
 
-Isso sobe (se ainda não estiverem no ar) frontend (8080), books-api (4000), auth-proxy (4100) e library-service (4200). Aguarde alguns segundos e acesse `http://localhost:8080/`.
+Aguarde alguns segundos e abra **http://localhost:8080/**.
 
-#### Opção B — Terminais separados (desenvolvimento)
+### Opção B — Terminais separados
 
-**Terminal 1 — books-api**
+Um terminal por serviço (ajuste `cd` conforme a tabela acima):
 
-```powershell
-Set-Location services\backend\books-api
-npm.cmd run dev
+```bash
+# Terminal 1 — books-api
+cd services/backend/books-api && npm run dev
+
+# Terminal 2 — library-service
+cd services/backend/library-service && npm run dev
+
+# Terminal 3 — auth-proxy (opcional em dev)
+cd services/backend/auth-proxy && npm run dev
+
+# Terminal 4 — frontend
+cd frontend && npm run dev
 ```
 
-**Terminal 2 — library-service**
-
-```powershell
-Set-Location services\backend\library-service
-npm.cmd run dev
-```
-
-**Terminal 3 — auth-proxy (opcional em dev; login também via Supabase no browser)**
-
-```powershell
-Set-Location services\backend\auth-proxy
-npm.cmd run dev
-```
-
-**Terminal 4 — frontend**
-
-```powershell
-Set-Location frontend
-npm.cmd run dev
-```
-
-#### Opção C — Docker (só backends)
+### Opção C — Docker (só backends)
 
 ```bash
 cd services/backend
-docker compose up --build
+docker compose up --build -d
+docker compose ps
+docker compose down
 ```
 
-Requer arquivos em `services/backend/envs/` conforme o `docker-compose.yml`.
+O frontend continua fora do Docker:
 
-#### URLs locais
+```bash
+cd frontend && npm run dev
+```
+
+### URLs locais
 
 | Recurso | URL |
-|---|---|
-| App (Vite) | `http://localhost:8080/` |
-| books-api health | `http://localhost:4000/health` |
-| auth-proxy health | `http://localhost:4100/health` |
-| library-service health | `http://localhost:4200/health` |
+|---------|-----|
+| App | http://localhost:8080/ |
+| books-api | http://localhost:4000/health |
+| auth-proxy | http://localhost:4100/health |
+| library-service | http://localhost:4200/health |
 
-### Solução de problemas
-
-| Sintoma | Causa provável | O que fazer |
-|--------|----------------|-------------|
-| Tela branca ao abrir o app | `VITE_SUPABASE_*` ausentes | Preencha `frontend/.env` e reinicie o Vite |
-| Livros/perfil não carregam | Backends parados ou URL errada | Suba books-api e library-service; use `VITE_BOOKS_API_URL` / `VITE_LIBRARY_API_URL` com `http://localhost:...` |
-| CORS bloqueado | Origem não listada no backend | Inclua sua URL em `allowedOrigins` nos serviços ou use `http://localhost:8080` |
-| Backend encerra ao iniciar | Supabase sem service role / anon | Confira `services/backend/envs/*.env` |
-| `npm` falha no PowerShell | Política bloqueia `npm.ps1` | Use `npm.cmd` |
-| Variáveis Vercel sem efeito | `VITE_*` embutidas no build | Altere no painel e faça **Redeploy** |
-| Testes de API falham | Deps dos backends não instaladas | `npm run install:backends` na raiz |
-
-## Documentação de Uso
-
-### Fluxos principais
-
-- **Descoberta:** home com destaques, busca por título/autor/gênero, detalhe do livro e resenhas.
-- **Leitura:** rota `/read/:id` com visualizador e sincronização de progresso (`library-service`).
-- **Biblioteca:** listas pessoais e metas de leitura.
-- **Contribuição:** envio de obra em `/submit-book` e acompanhamento em `/my-submissions`.
-- **Admin:** moderação de submissões e ferramentas de storage (rota protegida `/admin`).
-
-### Exemplo — health do books-api
-
-**CMD:**
-
-```cmd
+```bash
 curl http://localhost:4000/health
 ```
 
-**PowerShell:**
+Guia completo de backends e Docker: [services/README.md](services/README.md).
 
-```powershell
-Invoke-RestMethod -Uri "http://localhost:4000/health"
-```
-
-### Exemplo — auth-proxy (local)
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:4100/health"
-```
-
-Na Vercel (mesmo domínio do site): `GET /api/auth/health`, `POST /api/auth/login`, `POST /api/auth/signup`, `GET /api/auth/validate` (header `Authorization: Bearer …`).
-
-### Regras de negócio (resumo)
-
-- Formatos de submissão validados no upload (PDF/EPUB/MOBI).
-- Limites de tamanho configuráveis: `BOOKS_SUBMISSION_MAX_BYTES` (padrão 50MB), `PROFILE_MEDIA_MAX_BYTES` (padrão 25MB).
-- Rotas `/me/*` e biblioteca exigem token Supabase válido.
-- Painel admin restrito a perfis autorizados no backend.
-
-### Segurança implementada
-
-- Chaves Supabase sensíveis apenas nos microserviços.
-- CORS restrito a origens conhecidas (localhost + domínio Vercel).
-- Cabeçalhos HTTP de endurecimento (`X-Content-Type-Options`, `X-Frame-Options`, etc.).
-- Validação de senha e regras de cadastro espelhadas em testes (`tests/cadastro/`).
-- `.env` e `services/backend/envs/*.env` no `.gitignore`.
+---
 
 ## Testes
 
-Na **raiz** do repositório:
+Na raiz do repositório:
 
-**CMD:**
-
-```cmd
-cd /d C:\caminho\para\Eclipse-Reads
-npm install
+```bash
 npm run install:backends
 npm test
 ```
 
-**PowerShell:**
-
-```powershell
-Set-Location C:\caminho\para\Eclipse-Reads
-npm.cmd install
-npm.cmd run install:backends
-npm.cmd test
-```
-
 | Comando | Descrição |
-|--------|-----------|
+|---------|-----------|
 | `npm test` | Suíte Vitest completa |
-| `npm run test:api` | Contratos HTTP (`tests/api/`) |
-| `npm run test:auth` | Auth-proxy e contratos Supabase |
+| `npm run test:api` | Contratos HTTP |
+| `npm run test:auth` | Auth-proxy e JWT |
 | `npm run test:cadastro` | Regras de cadastro/senha |
 | `npm run test:upload` | Uploads e limites multer |
 | `npm run test:perfil` | Avatar e mídia de perfil |
-| `npm run test:coverage` | Cobertura v8 nos backends |
-| `npm run test:one-by-one` | Um arquivo `.test.ts` por vez |
+| `npm run test:coverage` | Cobertura nos backends |
 | `npm run test:docker` | Testes em container |
-| `npm run test:load:books-api` | K6 (requer `k6` instalado) |
-| `npm run test:e2e` | Playwright (`PLAYWRIGHT_RUN=1` + frontend rodando) |
+| `npm run test:e2e` | Playwright (opt-in) |
 
-Detalhes: [`tests/README.md`](tests/README.md).
+Manual detalhado: [tests/README.md](tests/README.md).
 
-## Deploy (Vercel)
+---
 
-Deploy recomendado na **raiz do repositório** (não só `frontend/`), para incluir a pasta **`api/`** na raiz (`api/auth.ts` + `vercel.json`). Não há `frontend/api/` — ver [`VERCEL_DEPLOY.md`](VERCEL_DEPLOY.md).
+## Deploy
 
-| Campo no painel | Valor |
-|----------------|--------|
-| **Root Directory** | *(vazio — raiz)* |
-| **Install Command** | `npm install` |
-| **Build Command** | `cd frontend && npm run build` |
-| **Output Directory** | `frontend/dist` |
-| **Node.js** | 20.x |
+Deploy na **raiz do repositório** (não só `frontend/`), para incluir `api/auth.ts` + `vercel.json`.
 
-### Variáveis obrigatórias
+| Campo | Valor |
+|-------|--------|
+| Root Directory | *(vazio)* |
+| Build Command | `cd frontend && npm run build` |
+| Output Directory | `frontend/dist` |
+| Node.js | 20.x |
 
-**Frontend (build — prefixo `VITE_`):**
+**Frontend (`VITE_*`):**
 
 ```env
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
@@ -401,36 +366,69 @@ VITE_BOOKS_API_URL=https://url-publica-do-books-api
 VITE_LIBRARY_API_URL=https://url-publica-do-library-service
 ```
 
-**Auth serverless (sem prefixo `VITE_`):**
+**Auth serverless (`api/auth.ts`):**
 
 ```env
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_ANON_KEY=MESMA_CHAVE_ANON_PUBLICA
 ```
 
-`books-api` e `library-service` em produção precisam de host próprio (ou gateway) com **HTTPS** e CORS liberando o domínio Vercel.
+`books-api` e `library-service` em produção ficam em host próprio com **HTTPS** e CORS liberando o domínio Vercel.
 
-Guia detalhado: [`VERCEL_DEPLOY.md`](VERCEL_DEPLOY.md).
+Validar após deploy:
 
-## Guia de Contribuição
+```bash
+curl https://seu-projeto.vercel.app/api/auth/health
+```
 
-1. Faça um fork do projeto.
-2. Crie uma branch de feature ou correção.
-3. Implemente com commits pequenos e objetivos.
-4. Rode `npm test` (e suites específicas, se alterou auth/upload/API).
-5. No PR, descreva motivação, impacto e passos para validar.
+---
 
-### Boas práticas
+## Solução de problemas
 
-- Não versionar segredos (`.env`, `services/backend/envs/*.env`).
-- Documentar novas variáveis em `frontend/.env.example` e neste README.
-- Manter compatibilidade com workspaces npm e pipeline em `.github/workflows/main.yml`.
+| Sintoma | Causa provável | O que fazer |
+|---------|----------------|-------------|
+| Tela branca | `VITE_SUPABASE_*` ausentes | Preencha `frontend/.env` e reinicie o Vite |
+| Livros/perfil não carregam | Backends parados ou URL errada | Suba books-api e library-service; confira `VITE_*_API_URL` |
+| CORS bloqueado | Origem não listada | Use `http://localhost:8080` ou configure `ALLOWED_ORIGINS` |
+| Backend encerra ao iniciar | Supabase mal configurado | Revise `services/backend/envs/*.env` |
+| `npm` bloqueado no PowerShell | Política bloqueia `npm.ps1` | Use `npm.cmd` no lugar de `npm` |
+| Variáveis Vercel sem efeito | `VITE_*` embutidas no build | Altere no painel e faça redeploy |
+| Testes de API falham | Deps dos backends ausentes | `npm run install:backends` |
 
-## Informações de Contato
+---
 
-### Repositório
+## Contribuição
 
-- **GitHub:** [Jamilinha29/Eclipse-Reads](https://github.com/Jamilinha29/Eclipse-Reads)
-- **Issues:** bugs, dúvidas de setup e melhorias via GitHub Issues.
+Contribuições são bem-vindas. Para colaborar:
 
-Ao pedir ajuda com execução local, inclua sistema operacional, comando executado e saída completa do terminal.
+1. Faça **fork** do repositório e crie uma branch (`feature/nome` ou `fix/nome`).
+2. Implemente a alteração com commits claros e objetivos.
+3. Execute `npm test` (e suites específicas se alterou API, auth ou upload).
+4. Abra um **Pull Request** descrevendo motivação, impacto e passos para validar.
+
+**Boas práticas:**
+
+- Não versionar `.env` nem `services/backend/envs/*.env`.
+- Documentar novas variáveis em `*.env.example`.
+- Manter compatibilidade com npm workspaces e o pipeline em `.github/workflows/main.yml`.
+
+---
+
+## Autor
+
+Desenvolvido por **[Jamilinha29](https://github.com/Jamilinha29)**.
+
+- **Repositório:** [Jamilinha29/Eclipse-Reads](https://github.com/Jamilinha29/Eclipse-Reads)
+- **Issues:** bugs, dúvidas de setup e melhorias
+
+Ao pedir ajuda, inclua SO, comando executado e saída completa do terminal.
+
+---
+
+## Links úteis
+
+| Documento | Conteúdo |
+|-----------|----------|
+| [services/README.md](services/README.md) | Microserviços, Docker, healthchecks |
+| [tests/README.md](tests/README.md) | Suítes Vitest, K6, Playwright |
+| [services/backend/envs/README.md](services/backend/envs/README.md) | Variáveis locais dos backends |

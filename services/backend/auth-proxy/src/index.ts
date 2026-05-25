@@ -1,6 +1,12 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
+import ws from "ws";
 import { createClient } from "@supabase/supabase-js";
+
+if (typeof globalThis.WebSocket === "undefined") {
+  (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
+    ws as unknown as typeof WebSocket;
+}
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";

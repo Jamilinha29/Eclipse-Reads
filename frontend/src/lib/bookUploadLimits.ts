@@ -1,0 +1,4 @@
+export {
+  BOOKS_SUBMISSION_MAX_MB,
+  DEFAULT_BOOKS_SUBMISSION_MAX_BYTES as BOOKS_SUBMISSION_MAX_BYTES,
+} from "@eclipse-reads/shared";

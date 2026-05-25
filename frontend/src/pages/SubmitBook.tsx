@@ -11,6 +11,7 @@ import { Upload, ArrowLeft, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { validateBookFileContent } from "@/lib/bookFileValidation";
+import { BOOKS_SUBMISSION_MAX_BYTES, BOOKS_SUBMISSION_MAX_MB } from "@/lib/bookUploadLimits";
 
 const SubmitBook = () => {
   const [title, setTitle] = useState("");
@@ -42,8 +43,8 @@ const SubmitBook = () => {
         return;
       }
 
-      if (selectedFile.size > 52428800) { // 50MB (limite)
-        toast.error("O arquivo deve ter no máximo 50MB");
+      if (selectedFile.size > BOOKS_SUBMISSION_MAX_BYTES) {
+        toast.error(`O arquivo deve ter no máximo ${BOOKS_SUBMISSION_MAX_MB}MB`);
         return;
       }
 

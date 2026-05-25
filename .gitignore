@@ -62,5 +62,8 @@ playwright/.cache/
 # Vercel CLI (link local do projeto)
 .vercel/
 
+# Documentação local (auditoria, refatoração) — não versionar no GitHub
+docs/
+
 # Supabase CLI — cache local; projeto real em services/main-service/supabase/
 supabase/

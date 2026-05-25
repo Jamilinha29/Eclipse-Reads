@@ -43,6 +43,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@eclipse-reads/shared": path.resolve(__dirname, "../services/backend/shared/src/index.ts"),
     },
   },
   build: {

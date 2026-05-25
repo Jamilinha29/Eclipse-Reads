@@ -1,48 +1,99 @@
-# Variáveis locais dos backends
+# Variáveis de ambiente — Backends
 
-Esta pasta guarda configuração **por máquina**. No GitHub ficam apenas os ficheiros `*.env.example`.
+Configuração **local por máquina** dos três microserviços. No GitHub ficam apenas os arquivos `*.env.example`.
 
-## Setup (primeira vez ou clone novo)
+---
 
-```bash
-cp auth-proxy.env.example auth-proxy.env
-cp books-api.env.example books-api.env
-cp library-service.env.example library-service.env
+## Setup inicial
+
+```powershell
+Set-Location services\backend\envs
+Copy-Item auth-proxy.env.example auth-proxy.env
+Copy-Item books-api.env.example books-api.env
+Copy-Item library-service.env.example library-service.env
 ```
 
-Edite cada `.env` com URL e chaves do [Supabase Dashboard](https://supabase.com/dashboard) → Project Settings → API.
+Edite cada `.env` com os valores do [Supabase Dashboard](https://supabase.com/dashboard) → **Project Settings** → **API**.
 
-| Ficheiro | Porta local | Uso |
-|----------|-------------|-----|
-| `auth-proxy.env` | 4100 | Login/validate (serverless local) |
-| `books-api.env` | 4000 | Catálogo, submissões, admin livros |
+| Arquivo | Porta | Serviço |
+|---------|------:|---------|
+| `auth-proxy.env` | 4100 | Login, signup, validate |
+| `books-api.env` | 4000 | Catálogo, submissões, arquivos |
 | `library-service.env` | 4200 | Biblioteca, perfil, settings |
 
-## O que vai para o Git
+---
 
-| Ficheiro | Git |
-|----------|-----|
+## O que versionar
+
+| Arquivo | Git |
+|---------|-----|
 | `*.env.example` | Sim (modelo sem segredos) |
-| `*.env` | **Não** (ignorado pelo `.gitignore`) |
+| `*.env` | **Não** (`.gitignore`) |
 
-Se os `.env` já estiveram no repositório antes, o próximo commit remove-os do tracking; **rotacione as chaves** no Supabase se o repo foi público.
+Se um `.env` chegou a ser commitado em repo público, **rotacione as chaves** no Supabase.
 
-## Segurança das chaves Supabase
+---
 
-| Chave | Onde usar | Pode ir no Git / browser? |
-|-------|-----------|---------------------------|
-| **anon / publishable** | `frontend/.env` → `VITE_SUPABASE_PUBLISHABLE_KEY` | Sim no browser (header `apikey` é esperado) |
+## Chaves Supabase
+
+| Chave | Onde usar | Frontend / Git? |
+|-------|-----------|-----------------|
+| **anon / publishable** | `auth-proxy.env`, `frontend/.env` | Pode ir no browser (`VITE_*`) |
 | **service_role** | `books-api.env`, `library-service.env` | **Nunca** no frontend nem no Git |
 
-- No DevTools você verá `Accept-Profile: public` e `apikey` — comportamento normal do Supabase/PostgREST.
-- A proteção de dados é **RLS** (políticas no SQL), não esconder a chave anon.
-- Na Vercel: `SUPABASE_SERVICE_KEY` só nas funções serverless (`api/*`), **sem** prefixo `VITE_`.
+Proteção de dados: **RLS** (políticas SQL), não ocultar a chave anon.
 
-## D-01 — service_role nos backends (decisão de design)
+---
 
-Os microserviços `books-api` e `library-service` usam **service_role** no servidor para contornar RLS em operações administrativas e de catálogo. Isso é intencional neste projeto acadêmico:
+## Variáveis por serviço
 
-- **Mitigação:** cada rota valida JWT/`requireAdmin` antes de chamar o Supabase; RLS continua protegendo acesso direto via PostgREST/anon.
-- **Alternativa futura:** RPCs `SECURITY DEFINER` + chave anon no backend, ou PostgREST com JWT do usuário repassado.
+### auth-proxy.env
 
-Não exponha `SUPABASE_SERVICE_KEY` no frontend nem em variáveis `VITE_*`.
+```env
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_ANON_KEY=SUA_CHAVE_ANON
+PORT=4100
+```
+
+### books-api.env
+
+```env
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_ANON_KEY=SUA_CHAVE_ANON
+SUPABASE_SERVICE_KEY=SUA_SERVICE_ROLE
+FILE_ACCESS_SECRET=GERAR_32_BYTES_HEX
+PORT=4000
+```
+
+Gerar `FILE_ACCESS_SECRET`:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### library-service.env
+
+```env
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_ANON_KEY=SUA_CHAVE_ANON
+SUPABASE_SERVICE_KEY=SUA_SERVICE_ROLE
+PORT=4200
+```
+
+Opcional em todos: `ALLOWED_ORIGINS` (CORS, URLs separadas por vírgula).
+
+---
+
+## Decisão D-01 — service_role nos backends
+
+`books-api` e `library-service` usam **service_role** no servidor para operações administrativas e de catálogo (projeto acadêmico):
+
+- Cada rota valida JWT ou `requireAdmin` antes de chamar o Supabase.
+- RLS protege acesso direto via PostgREST com chave anon.
+- **Nunca** exponha `SUPABASE_SERVICE_KEY` em variáveis `VITE_*`.
+
+---
+
+## Carregamento
+
+Cada serviço lê `../../envs/<serviço>.env` a partir de `src/index.ts` — funciona com `npm run dev` e com Docker Compose (`env_file` no `docker-compose.yml`).

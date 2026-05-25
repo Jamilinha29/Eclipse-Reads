@@ -1,287 +1,184 @@
-# Services - Eclipse Reads
+# Backends — Eclipse Reads
 
-Este diretório contém os microserviços backend do Eclipse Reads, organizados em uma arquitetura modular e escalável.
+Manual dos **microserviços Node/Express** que sustentam catálogo, autenticação auxiliar, biblioteca e perfil. O frontend React consome estas APIs; dados persistentes ficam no **Supabase**.
 
-## 📋 Índice
+---
 
-- [Visão Geral](#visão-geral)
-- [Arquitetura](#arquitetura)
-- [Microserviços](#microserviços)
-- [Como Executar](#como-executar)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Testes](#testes)
-- [Healthchecks e Monitoramento](#healthchecks-e-monitoramento)
+## Índice
 
-## 🎯 Visão Geral
+1. [Visão geral](#visão-geral)
+2. [Serviços e portas](#serviços-e-portas)
+3. [Pacote compartilhado](#pacote-compartilhado)
+4. [Instalação e configuração](#instalação-e-configuração)
+5. [Executar localmente](#executar-localmente)
+6. [Executar com Docker](#executar-com-docker)
+7. [Variáveis de ambiente](#variáveis-de-ambiente)
+8. [Health e monitoramento](#health-e-monitoramento)
+9. [Fluxo de comunicação](#fluxo-de-comunicação)
 
-A arquitetura de microserviços do Eclipse Reads foi projetada para separar responsabilidades e permitir escalabilidade independente de cada componente. Os serviços comunicam-se através de APIs REST e compartilham o Supabase como backend-as-a-service para autenticação, banco de dados e storage.
+Variáveis locais: [backend/envs/README.md](backend/envs/README.md).
 
-## 🏗️ Arquitetura
+---
+
+## Visão geral
+
+A camada backend separa responsabilidades em três APIs independentes, escaláveis e testáveis:
+
+| Serviço | Responsabilidade principal |
+|---------|---------------------------|
+| **books-api** | Catálogo, submissões, reviews, download seguro de arquivos, admin |
+| **auth-proxy** | Login, cadastro, refresh, validação de token JWT |
+| **library-service** | Biblioteca pessoal, perfil, settings, progresso de leitura |
+
+Todos usam **Supabase** (Auth, PostgREST, Storage) e carregam configuração de `backend/envs/*.env`.
+
+---
+
+## Serviços e portas
+
+| Serviço | Pasta | Porta | Endpoints principais |
+|---------|-------|------:|----------------------|
+| books-api | `backend/books-api/` | 4000 | `/health`, `/books`, `/submissions`, `/metrics` (admin) |
+| auth-proxy | `backend/auth-proxy/` | 4100 | `/health`, `/login`, `/signup`, `/validate`, `/refresh` |
+| library-service | `backend/library-service/` | 4200 | `/health`, `/library`, `/me/profile`, `/me/settings` |
+
+### books-api
+
+- CRUD de livros e moderação de submissões (PDF/EPUB/MOBI).
+- Validação de magic bytes via `@eclipse-reads/shared`.
+- Download de arquivos com token HMAC (`FILE_ACCESS_SECRET`).
+- Limite de upload: `BOOKS_SUBMISSION_MAX_BYTES` (padrão 50 MB).
+
+### auth-proxy
+
+- Proxy fino sobre Supabase Auth para integrações e `/api/auth/*` na Vercel.
+- Rate limit em login/signup (30 req / 15 min por IP).
+- O login principal no browser usa o cliente Supabase direto no frontend.
+
+### library-service
+
+- Listas `favoritos`, `lendo`, `lidos` por usuário autenticado.
+- Perfil, avatar, banner, metas e progresso de leitura.
+- Respostas **sem** `file_path` (segurança).
+
+---
+
+## Pacote compartilhado
 
 ```
-services/
-├── backend/
-│   ├── auth-proxy/          # Serviço de validação de autenticação
-│   ├── books-api/           # API de gerenciamento de livros
-│   ├── library-service/     # Serviço de biblioteca pessoal
-│   ├── envs/                # .env local (ignorado no Git) + *.env.example
-│   └── docker-compose.yml   # Orquestração dos serviços
-└── main-service/
-    └── supabase/            # Configurações do Supabase
+backend/shared/   →  @eclipse-reads/shared
 ```
 
-## 🔧 Microserviços
+| Módulo | Uso |
+|--------|-----|
+| `validateBookFileBytes` | Validação PDF/EPUB/MOBI (frontend + books-api) |
+| `DEFAULT_BOOKS_SUBMISSION_MAX_BYTES` | Limite padrão de upload (50 MB) |
 
-### 1. Auth Proxy (Porta 4100)
+O `books-api` compila o shared antes do `tsc` (`npm run build`). No Docker, o Dockerfile inclui o build do shared.
 
-**Responsabilidade:** Validação de tokens de autenticação e verificação de usuários.
+---
 
-**Endpoints principais:**
-- `GET /health` - Health check do serviço
-- `GET /validate` - Valida token JWT e retorna informações do usuário
+## Instalação e configuração
 
-**Tecnologias:**
-- Express.js
-- Supabase Auth Client
-- TypeScript
+Na **raiz** do monorepo (recomendado):
 
-**Características:**
-- Valida tokens usando o Supabase Auth
-- Retorna informações do usuário autenticado
-- Healthcheck configurado com intervalo de 10s
+```bash
+npm install
+npm run install:backends
+```
 
-### 2. Books API (Porta 4000)
+Copie os templates em `services/backend/envs/` (`*.env.example` → `*.env`) e edite com URL e chaves do [Supabase Dashboard](https://supabase.com/dashboard) → Project Settings → API.
 
-**Responsabilidade:** CRUD de livros, upload de arquivos, busca e gerenciamento de submissões.
+---
 
-**Endpoints principais:**
-- `GET /health` - Health check do serviço
-- `GET /metrics` - Métricas de requisições e uptime
-- Endpoints de livros (criar, listar, buscar, atualizar, deletar)
-- Upload e download de arquivos PDF/EPUB/MOBI
+## Executar localmente
 
-**Tecnologias:**
-- Express.js
-- Supabase (Storage + Database)
-- Morgan (logging)
-- TypeScript
+Um serviço por terminal:
 
-**Características:**
-- Suporte a uploads de até 10MB
-- CORS configurado para desenvolvimento e produção
-- Service key do Supabase para operações administrativas
-- Métricas de performance e uptime
+```bash
+cd services/backend/books-api && npm run dev
+```
 
-### 3. Library Service (Porta 4200)
+Repita para `library-service` e `auth-proxy`. O frontend em `frontend/` aponta para `localhost:4000`, `:4200` e `:4100`.
 
-**Responsabilidade:** Gerenciamento da biblioteca pessoal dos usuários (favoritos, lendo, lidos).
+Ou, na raiz: `npm run dev:all` (sobe frontend + três backends).
 
-**Endpoints principais:**
-- `GET /health` - Health check do serviço
-- `GET /library?type=favoritos` - Lista favoritos do usuário
-- `GET /library?type=lendo` - Lista livros em leitura
-- `GET /library?type=lidos` - Lista livros já lidos
+---
 
-**Tecnologias:**
-- Express.js
-- Supabase Client
-- TypeScript
+## Executar com Docker
 
-**Características:**
-- Autenticação via Bearer token
-- Acesso a tabelas: `favorites`, `reading`, `read`
-- Healthcheck configurado com intervalo de 10s
+Requer Docker Desktop em execução e arquivos em `backend/envs/`.
 
-## 🚀 Como Executar
-
-### Pré-requisitos
-
-- Docker e Docker Compose instalados
-- Node.js 18+ (para desenvolvimento local)
-- Conta no Supabase configurada
-
-### Executar com Docker Compose
-
-1. Copie `backend/envs/*.env.example` para `*.env` e preencha as chaves (ver `backend/envs/README.md`). Os `.env` **não** vão para o GitHub.
-
-2. Inicie todos os serviços:
-
-```powershell
+```bash
 cd services/backend
-docker-compose up -d
+docker compose up --build -d
+docker compose ps
+docker compose logs -f
+docker compose down
 ```
 
-3. Verifique o status dos serviços:
+| Container | Porta |
+|-----------|------:|
+| `backend-books-api-1` | 4000 |
+| `backend-auth-proxy-1` | 4100 |
+| `backend-library-service-1` | 4200 |
 
-```powershell
-docker-compose ps
+O **frontend não está no Compose** — rode `npm run dev` em `frontend/` separadamente.
+
+Rebuild forçado:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
 ```
 
-4. Visualize os logs:
+---
 
-```powershell
-docker-compose logs -f
-```
+## Variáveis de ambiente
 
-### Executar Localmente (Desenvolvimento)
+Resumo — detalhes em [backend/envs/README.md](backend/envs/README.md).
 
-Para executar um serviço específico localmente:
+| Arquivo | Variáveis críticas |
+|---------|-------------------|
+| `auth-proxy.env` | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PORT=4100` |
+| `books-api.env` | `SUPABASE_*`, `FILE_ACCESS_SECRET`, `PORT=4000` |
+| `library-service.env` | `SUPABASE_*`, `PORT=4200` |
 
-```powershell
-# Auth Proxy
-cd services/backend/auth-proxy
-npm install
-npm run dev
+Opcional em todos: `ALLOWED_ORIGINS` (CORS, lista separada por vírgula).
 
-# Books API
-cd services/backend/books-api
-npm install
-npm run dev
+> **Nunca** coloque `SUPABASE_SERVICE_KEY` no frontend nem em variáveis `VITE_*`.
 
-# Library Service
-cd services/backend/library-service
-npm install
-npm run dev
-```
+---
 
-## 🔐 Variáveis de Ambiente
+## Health e monitoramento
 
-Os serviços carregam `.env` a partir de `services/backend/envs/` usando caminho relativo ao arquivo `src/index.ts` (`../../envs/<serviço>.env`). Isso funciona tanto ao rodar `npm run dev` dentro de cada serviço quanto via Docker, desde que o arquivo exista (copie de `*.env.example`).
-
-### auth-proxy.env
-
-```env
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_ANON_KEY=sua-chave-anon
-NODE_ENV=development
-PORT=4100
-```
-
-### books-api.env
-
-```env
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_SERVICE_KEY=sua-service-key
-SUPABASE_ANON_KEY=sua-chave-anon
-NODE_ENV=development
-PORT=4000
-CORS_ORIGINS=http://localhost:8080,http://localhost:5173,https://seu-front.vercel.app
-```
-
-### library-service.env
-
-```env
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_ANON_KEY=sua-chave-anon
-SUPABASE_SERVICE_KEY=sua-service-key
-NODE_ENV=development
-PORT=4200
-```
-
-## 🧪 Testes
-
-Os testes estão localizados na pasta `tests/` na raiz do projeto:
-
-### Testes por funcionalidade
-
-```powershell
-npm run test:auth
-npm run test:cadastro
-npm run test:upload
-npm run test:perfil
-npm test
-```
-
-### Testes com Docker
-
-```powershell
-npm run test:docker
-npm run test:docker:down
-```
-
-### Testes de Carga
-
-```powershell
-k6 run -e SUPABASE_URL=https://seu-projeto.supabase.co -e SUPABASE_KEY=sua-chave-anon tests/load/teste-carga-completo.js
-```
-
-## 📊 Healthchecks e Monitoramento
-
-Todos os serviços possuem healthchecks configurados:
-
-- **Intervalo:** 10 segundos
-- **Timeout:** 5 segundos
-- **Retries:** 3 tentativas
-
-### Verificar Health dos Serviços
-
-```powershell
-# Auth Proxy
-curl http://localhost:4100/health
-
-# Books API
+```bash
 curl http://localhost:4000/health
-
-# Library Service
+curl http://localhost:4100/health
 curl http://localhost:4200/health
 ```
 
-### Métricas (Books API)
+**books-api — métricas** (exige admin):
 
-```powershell
-curl http://localhost:4000/metrics
+```bash
+curl http://localhost:4000/metrics -H "Authorization: Bearer SEU_TOKEN"
 ```
 
-Retorna:
-```json
-{
-  "requests": 1234,
-  "uptime_ms": 3600000
-}
-```
+Docker Compose define healthchecks a cada 10 s; status **healthy** aparece no Docker Desktop.
 
-## 🔄 Fluxo de Comunicação
+---
+
+## Fluxo de comunicação
 
 ```
-Frontend (React)
-    ↓
-    ├─→ Auth Proxy (validação de token)
-    ├─→ Books API (CRUD de livros)
-    └─→ Library Service (biblioteca pessoal)
-         ↓
-    Supabase (Auth, Database, Storage)
+Frontend (React :8080)
+    │
+    ├─► auth-proxy (:4100)     — validate, login (integrações)
+    ├─► books-api (:4000)      — catálogo, submissões, arquivos
+    └─► library-service (:4200)— biblioteca, perfil, progresso
+              │
+              ▼
+         Supabase (Auth · DB · Storage)
 ```
 
-## 📝 Notas de Desenvolvimento
-
-- Cada serviço é independente e pode ser escalado separadamente
-- Os serviços usam TypeScript para type safety
-- Docker Compose facilita o desenvolvimento local com todos os serviços
-- Healthchecks garantem disponibilidade e facilitam debugging
-- CORS está configurado para permitir requests do frontend
-
-## 🛠️ Manutenção
-
-### Rebuild dos Containers
-
-```powershell
-docker-compose up -d --build
-```
-
-### Parar os Serviços
-
-```powershell
-docker-compose down
-```
-
-### Limpar Volumes e Dados
-
-```powershell
-docker-compose down -v
-```
-
-## 📚 Recursos Adicionais
-
-- [Documentação do Supabase](https://supabase.com/docs)
-- [Express.js Guide](https://expressjs.com/en/guide/routing.html)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
+Em produção: frontend na **Vercel**; `books-api` e `library-service` em host dedicado (ex.: Render); `auth-proxy` opcionalmente como serverless (`api/auth.ts`).
