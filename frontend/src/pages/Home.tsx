@@ -20,7 +20,7 @@ interface Quote {
 }
 
 const Home = () => {
-  const { isLoggedIn, authType, username, theme } = useAuth();
+  const { isLoggedIn, authType, username } = useAuth();
   const [dailyQuote, setDailyQuote] = useState<Quote | null>(null);
   const { books, status, message, reload } = useCatalogBooks(12);
 
@@ -56,7 +56,7 @@ const Home = () => {
         <p className="text-muted-foreground text-lg">O que gostaria de ler hoje?</p>
 
         {(!isLoggedIn || authType === "guest") && (
-          <Card className="mt-6 gradient-primary p-6 border-0 shadow-glow">
+          <Card className="mt-6 banner-surface p-6 border-0 shadow-glow">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex items-start gap-3">
                 <div className="rounded-full bg-white/20 p-2">
@@ -64,13 +64,13 @@ const Home = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg mb-1">Libere Todos os Livros!</h3>
-                  <p className="text-sm text-primary-foreground/90">
+                  <p className="text-sm opacity-90">
                     Faça login para recursos ilimitados
                   </p>
                 </div>
               </div>
               <Link to="/auth">
-                <Button size="sm" variant="secondary" className="gap-2 bg-white hover:bg-white/90 text-primary">
+                <Button size="sm" variant="secondary" className="banner-cta-button gap-2">
                   Fazer Login
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -80,29 +80,19 @@ const Home = () => {
         )}
 
         {isLoggedIn && dailyQuote && (
-          <Card className={`mt-6 relative overflow-hidden border-0 shadow-glow ${
-            theme === "light" 
-              ? "bg-gradient-to-br from-slate-400 to-slate-500 text-slate-900" 
-              : "gradient-primary text-primary-foreground"
-          }`}>
+          <Card className="mt-6 relative overflow-hidden border-0 banner-surface shadow-glow">
             <div className="absolute top-4 left-4">
-              <BookOpen className={`h-6 w-6 ${theme === "light" ? "text-slate-700" : "text-primary-foreground/80"}`} />
+              <BookOpen className="h-6 w-6 opacity-80" />
             </div>
             
             <div className="pt-16 pb-8 px-8 text-center">
-              <h3 className={`text-sm font-semibold mb-4 ${
-                theme === "light" ? "text-slate-800" : "text-primary-foreground/90"
-              }`}>
+              <h3 className="text-sm font-semibold mb-4 opacity-90">
                 Frase do Dia
               </h3>
-              <p className={`text-lg italic mb-4 max-w-2xl mx-auto leading-relaxed ${
-                theme === "light" ? "text-slate-900" : "text-primary-foreground"
-              }`}>
+              <p className="text-lg italic mb-4 max-w-2xl mx-auto leading-relaxed">
                 "{dailyQuote.quote}"
               </p>
-              <p className={`text-sm font-medium ${
-                theme === "light" ? "text-slate-700" : "text-primary-foreground/80"
-              }`}>
+              <p className="text-sm font-medium opacity-80">
                 — {dailyQuote.author}
               </p>
             </div>

@@ -155,14 +155,13 @@ const Header = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
-                <Avatar className="h-9 w-9 bg-primary">
-                  {avatarImage ? (
+                <Avatar className="h-9 w-9 menu-avatar-neon">
+                  {avatarImage && (
                     <AvatarImage src={avatarImage} className="object-cover object-center" />
-                  ) : (
-                    <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                      {username.charAt(0).toUpperCase()}
-                    </AvatarFallback>
                   )}
+                  <AvatarFallback className="menu-avatar-neon-fallback font-semibold">
+                    {(username.trim().charAt(0) || "U").toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>

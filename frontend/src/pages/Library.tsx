@@ -92,7 +92,7 @@ const Library = () => {
                 usados.
               </span>
               <Link to="/auth">
-                <Button size="sm" variant="default">
+                <Button size="sm" className="banner-cta-button">
                   Fazer Login para Liberar
                 </Button>
               </Link>
@@ -108,25 +108,25 @@ const Library = () => {
 
         <div className="flex gap-2 mb-8 flex-wrap justify-center">
           <Button
-            variant={activeTab === "favoritos" ? "default" : "secondary"}
+            variant="ghost"
             onClick={() => setActiveTab("favoritos")}
-            className="gap-2"
+            className={`gap-2 ${activeTab === "favoritos" ? "library-tab-active" : "library-tab"}`}
           >
             <Heart className="h-4 w-4" />
             Favoritos
           </Button>
           <Button
-            variant={activeTab === "lendo" ? "default" : "secondary"}
+            variant="ghost"
             onClick={() => setActiveTab("lendo")}
-            className="gap-2"
+            className={`gap-2 ${activeTab === "lendo" ? "library-tab-active" : "library-tab"}`}
           >
             <Eye className="h-4 w-4" />
             Lendo
           </Button>
           <Button
-            variant={activeTab === "lidos" ? "default" : "secondary"}
+            variant="ghost"
             onClick={() => setActiveTab("lidos")}
-            className="gap-2"
+            className={`gap-2 ${activeTab === "lidos" ? "library-tab-active" : "library-tab"}`}
           >
             <Check className="h-4 w-4" />
             Lidos
@@ -145,7 +145,7 @@ const Library = () => {
               <p className="text-muted-foreground">{empty.description}</p>
               {empty.showSearch && (
                 <Link to="/search">
-                  <Button className="gap-2 mt-2">
+                  <Button variant="ghost" className="gap-2 mt-2 library-tab-active">
                     <BookOpen className="h-4 w-4" />
                     Buscar livros
                   </Button>

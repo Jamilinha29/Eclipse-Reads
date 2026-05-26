@@ -61,7 +61,7 @@ const Plan = () => {
           <p className="text-muted-foreground">Escolha o plano ideal para você</p>
         </div>
 
-        <Card className="p-6 mb-6 gradient-primary border-0 shadow-glow">
+        <Card className="p-6 mb-6 banner-surface border-0 shadow-glow">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold">Plano Atual</h2>
@@ -121,7 +121,7 @@ const Plan = () => {
               ))}
             </ul>
 
-            <Button className="w-full gradient-accent border-0 text-accent-foreground font-bold">
+            <Button className="w-full banner-surface-accent border-0 font-bold">
               Assinar Premium
             </Button>
           </Card>
@@ -142,13 +142,13 @@ const Plan = () => {
           </div>
         </div>
 
-        <Card className="p-8 gradient-primary border-0 text-center">
+        <Card className="p-8 banner-surface border-0 text-center shadow-glow">
           <Crown className="h-16 w-16 mx-auto mb-4 text-white" />
           <h2 className="text-2xl font-bold mb-3">Desbloqueie Todo o Potencial do Eclipse Reads</h2>
-          <p className="text-primary-foreground/90 mb-6 max-w-2xl mx-auto">
+          <p className="opacity-90 mb-6 max-w-2xl mx-auto">
             Acesse conteúdos exclusivos, personalize sua experiência e aproveite todos os recursos sem limites
           </p>
-          <Button size="lg" className="bg-white hover:bg-white/90 text-primary font-bold">
+          <Button size="lg" className="banner-cta-button font-bold">
             Começar Período Grátis
           </Button>
         </Card>

@@ -17,8 +17,8 @@ Todas as cores DEVEM ser HSL.
     --popover: 240 5% 28%;
     --popover-foreground: 240 5% 98%;
 
-    --primary: 270 75% 65%;
-    --primary-foreground: 270 20% 98%;
+    --primary: 268 40% 78%;
+    --primary-foreground: 222 47% 11%;
 
     --secondary: 240 5% 35%;
     --secondary-foreground: 240 5% 98%;
@@ -26,30 +26,57 @@ Todas as cores DEVEM ser HSL.
     --muted: 240 5% 32%;
     --muted-foreground: 240 5% 70%;
 
-    --accent: 270 70% 75%;
-    --accent-foreground: 240 5% 25%;
+    --accent: 268 36% 82%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 270 20% 98%;
+    --destructive-foreground: 268 18% 98%;
 
     --border: 240 5% 40%;
     --input: 240 5% 32%;
-    --ring: 270 75% 65%;
+    --ring: 268 40% 78%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 240 5% 25%;
     --sidebar-foreground: 240 5% 98%;
-    --sidebar-primary: 270 75% 65%;
-    --sidebar-primary-foreground: 270 20% 98%;
+    --sidebar-primary: 268 40% 78%;
+    --sidebar-primary-foreground: 268 18% 98%;
     --sidebar-accent: 240 5% 35%;
     --sidebar-accent-foreground: 240 5% 98%;
     --sidebar-border: 240 5% 40%;
-    --sidebar-ring: 270 75% 65%;
+    --sidebar-ring: 268 40% 78%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(270 75% 65%), hsl(280 70% 55%));
-    --gradient-accent: linear-gradient(135deg, hsl(270 70% 75%), hsl(280 65% 70%));
-    --shadow-glow: 0 0 40px hsl(270 75% 65% / 0.3);
+    --gradient-primary: linear-gradient(135deg, hsl(215 20% 65%), hsl(215 16% 46%));
+    --gradient-accent: linear-gradient(135deg, hsl(215 18% 58%), hsl(268 22% 42%));
+    --banner-bg: linear-gradient(135deg, hsl(215 20% 65%), hsl(215 16% 46%));
+    --banner-accent-bg: linear-gradient(135deg, hsl(215 18% 58%), hsl(268 22% 42%));
+    --banner-foreground: 222 47% 11%;
+    --banner-glow: 0 0 40px hsl(268 52% 58% / 0.28), 0 0 72px hsl(268 48% 52% / 0.14);
+    --shadow-glow: 0 0 32px hsl(268 56% 50% / 0.18);
+    --profile-banner-bg: linear-gradient(135deg, hsl(268 26% 38%), hsl(268 28% 46%));
+    --profile-avatar-bg: linear-gradient(145deg, hsl(268 22% 50%), hsl(268 24% 58%));
+    --profile-avatar-fg: 0 0% 98%;
+    --profile-media-overlay-color: 268 22% 32%;
+    --profile-media-overlay-alpha: 0.48;
+    --profile-media-icon: 268 38% 94%;
+    --library-tab-bg: 240 5% 44%;
+    --library-tab-active-bg: 0 0% 88%;
+    --library-tab-fg: 240 5% 96%;
+    --library-tab-active-fg: 222 35% 18%;
+    --genre-filter-bg: linear-gradient(135deg, hsl(215 14% 48%), hsl(215 12% 56%));
+    --genre-filter-fg: 0 0% 98%;
+    --genre-filter-border: 215 12% 68%;
+    --genre-filter-item-active: 0 0% 100% / 0.16;
+    --menu-avatar-neon-bg: linear-gradient(145deg, hsl(268 38% 68%), hsl(275 34% 64%));
+    --menu-avatar-neon-fg: 0 0% 100%;
+    --menu-avatar-neon-border: 268 52% 86%;
+    --menu-avatar-neon-glow: 0 0 8px hsl(268 65% 80% / 0.4), 0 0 16px hsl(275 60% 76% / 0.25), 0 0 24px hsl(268 70% 78% / 0.14);
+    --menu-avatar-neon-text-glow: 0 0 4px hsl(268 55% 94% / 0.65);
+    --menu-avatar-neon-glow-hover: 0 0 10px hsl(268 68% 82% / 0.5), 0 0 20px hsl(275 62% 78% / 0.32), 0 0 32px hsl(268 72% 80% / 0.18);
+    --cta-button-bg: 240 8% 93%;
+    --cta-button-fg: 222 16% 38%;
+    --cta-button-bg-hover: 240 8% 90%;
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -60,31 +87,58 @@ Todas as cores DEVEM ser HSL.
     --card-foreground: 270 20% 95%;
     --popover: 263 45% 14%;
     --popover-foreground: 270 20% 95%;
-    --primary: 270 75% 65%;
-    --primary-foreground: 270 20% 98%;
+    --primary: 268 58% 62%;
+    --primary-foreground: 268 18% 98%;
     --secondary: 263 35% 22%;
     --secondary-foreground: 270 20% 95%;
     --muted: 263 30% 20%;
     --muted-foreground: 270 10% 65%;
-    --accent: 270 70% 75%;
+    --accent: 268 52% 68%;
     --accent-foreground: 263 45% 12%;
     --destructive: 0 72% 51%;
-    --destructive-foreground: 270 20% 98%;
+    --destructive-foreground: 268 18% 98%;
     --border: 263 30% 25%;
     --input: 263 35% 20%;
-    --ring: 270 75% 65%;
+    --ring: 268 58% 62%;
     --sidebar-background: 263 45% 12%;
     --sidebar-foreground: 270 20% 95%;
-    --sidebar-primary: 270 75% 65%;
-    --sidebar-primary-foreground: 270 20% 98%;
+    --sidebar-primary: 268 58% 62%;
+    --sidebar-primary-foreground: 268 18% 98%;
     --sidebar-accent: 263 35% 22%;
     --sidebar-accent-foreground: 270 20% 95%;
     --sidebar-border: 263 30% 25%;
-    --sidebar-ring: 270 75% 65%;
+    --sidebar-ring: 268 58% 62%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(270 75% 55%), hsl(280 70% 45%));
-    --gradient-accent: linear-gradient(135deg, hsl(270 70% 65%), hsl(280 65% 55%));
-    --shadow-glow: 0 0 40px hsl(270 75% 55% / 0.25);
+    --gradient-primary: linear-gradient(135deg, hsl(268 56% 48%), hsl(275 52% 42%));
+    --gradient-accent: linear-gradient(135deg, hsl(268 50% 52%), hsl(275 46% 46%));
+    --banner-bg: linear-gradient(135deg, hsl(268 54% 46%), hsl(275 50% 40%));
+    --banner-accent-bg: linear-gradient(135deg, hsl(268 50% 50%), hsl(275 46% 44%));
+    --banner-foreground: 268 18% 98%;
+    --banner-glow: 0 0 40px hsl(268 60% 58% / 0.32), 0 0 72px hsl(275 54% 50% / 0.2);
+    --shadow-glow: 0 0 32px hsl(268 58% 48% / 0.16);
+    --profile-banner-bg: linear-gradient(135deg, hsl(263 22% 28%), hsl(268 20% 34%));
+    --profile-avatar-bg: linear-gradient(145deg, hsl(263 36% 24%), hsl(268 38% 34%));
+    --profile-avatar-fg: 0 0% 98%;
+    --profile-media-overlay-color: 263 45% 8%;
+    --profile-media-overlay-alpha: 0.55;
+    --profile-media-icon: 268 50% 88%;
+    --library-tab-bg: 263 32% 28%;
+    --library-tab-active-bg: 268 38% 52%;
+    --library-tab-fg: 270 15% 92%;
+    --library-tab-active-fg: 268 18% 98%;
+    --genre-filter-bg: linear-gradient(135deg, hsl(263 32% 24%), hsl(268 28% 34%));
+    --genre-filter-fg: 268 20% 96%;
+    --genre-filter-border: 268 28% 38%;
+    --genre-filter-item-active: 268 52% 68% / 0.18;
+    --menu-avatar-neon-bg: linear-gradient(145deg, hsl(268 58% 50%), hsl(275 54% 44%));
+    --menu-avatar-neon-fg: 0 0% 100%;
+    --menu-avatar-neon-border: 268 78% 70%;
+    --menu-avatar-neon-glow: 0 0 10px hsl(268 90% 62% / 0.75), 0 0 20px hsl(275 85% 55% / 0.5), 0 0 32px hsl(268 95% 65% / 0.28);
+    --menu-avatar-neon-text-glow: 0 0 8px hsl(268 100% 88% / 1), 0 0 14px hsl(275 90% 70% / 0.6);
+    --menu-avatar-neon-glow-hover: 0 0 12px hsl(268 90% 65% / 0.8), 0 0 24px hsl(275 85% 58% / 0.55), 0 0 40px hsl(268 95% 62% / 0.35);
+    --cta-button-bg: 268 18% 91%;
+    --cta-button-fg: 263 22% 36%;
+    --cta-button-bg-hover: 268 18% 88%;
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -112,9 +166,114 @@ Todas as cores DEVEM ser HSL.
   .bg-gradient-accent {
     background: var(--gradient-accent);
   }
+
+  .banner-surface {
+    background: var(--banner-bg);
+    color: hsl(var(--banner-foreground));
+    box-shadow: var(--banner-glow);
+  }
+
+  .banner-surface-accent {
+    background: var(--banner-accent-bg);
+    color: hsl(var(--banner-foreground));
+    box-shadow: var(--banner-glow);
+  }
   
   .shadow-glow {
     box-shadow: var(--shadow-glow);
+  }
+
+  .banner-surface.shadow-glow,
+  .banner-surface-accent.shadow-glow {
+    box-shadow: var(--banner-glow);
+  }
+
+  .banner-cta-button {
+    background-color: hsl(var(--cta-button-bg)) !important;
+    color: hsl(var(--cta-button-fg)) !important;
+  }
+
+  .banner-cta-button:hover,
+  .banner-cta-button:focus-visible {
+    background-color: hsl(var(--cta-button-bg-hover)) !important;
+    color: hsl(var(--cta-button-fg)) !important;
+  }
+
+  .profile-media-banner {
+    background: var(--profile-banner-bg);
+  }
+
+  .profile-media-avatar,
+  .profile-media-avatar-fallback {
+    background: var(--profile-avatar-bg);
+    color: hsl(var(--profile-avatar-fg));
+  }
+
+  .profile-media-overlay {
+    background-color: hsl(var(--profile-media-overlay-color) / var(--profile-media-overlay-alpha));
+    color: hsl(var(--profile-media-icon));
+  }
+
+  .menu-avatar-neon,
+  .menu-avatar-neon-fallback {
+    background: var(--menu-avatar-neon-bg);
+    color: hsl(var(--menu-avatar-neon-fg));
+    border: 1.5px solid hsl(var(--menu-avatar-neon-border) / 0.9);
+    box-shadow: var(--menu-avatar-neon-glow);
+    transition: box-shadow 0.3s ease, filter 0.3s ease;
+  }
+
+  .menu-avatar-neon-fallback {
+    text-shadow: var(--menu-avatar-neon-text-glow);
+  }
+
+  button:hover .menu-avatar-neon,
+  button:focus-visible .menu-avatar-neon {
+    filter: brightness(1.08);
+    box-shadow: var(--menu-avatar-neon-glow-hover);
+  }
+
+  .library-tab {
+    background-color: hsl(var(--library-tab-bg));
+    color: hsl(var(--library-tab-fg));
+  }
+
+  .library-tab:hover,
+  .library-tab:focus-visible {
+    background-color: hsl(var(--library-tab-bg) / 0.88) !important;
+    color: hsl(var(--library-tab-fg)) !important;
+  }
+
+  .library-tab-active {
+    background-color: hsl(var(--library-tab-active-bg));
+    color: hsl(var(--library-tab-active-fg));
+  }
+
+  .library-tab-active:hover,
+  .library-tab-active:focus-visible {
+    background-color: hsl(var(--library-tab-active-bg) / 0.92) !important;
+    color: hsl(var(--library-tab-active-fg)) !important;
+  }
+
+  .genre-filter {
+    background: var(--genre-filter-bg);
+    color: hsl(var(--genre-filter-fg));
+    border: 1px solid hsl(var(--genre-filter-border) / 0.45);
+    box-shadow: 0 1px 8px hsl(268 52% 58% / 0.08);
+  }
+
+  .genre-filter:hover,
+  .genre-filter:focus-visible {
+    background: var(--genre-filter-bg) !important;
+    color: hsl(var(--genre-filter-fg)) !important;
+    border-color: hsl(var(--genre-filter-border) / 0.7);
+    box-shadow: 0 2px 12px hsl(268 52% 58% / 0.14);
+    filter: brightness(1.05);
+  }
+
+  .genre-filter-item-active {
+    background-color: hsl(var(--genre-filter-item-active));
+    color: hsl(var(--genre-filter-fg));
   }
   
   .transition-smooth {

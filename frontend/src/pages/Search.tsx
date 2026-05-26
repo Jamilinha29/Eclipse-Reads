@@ -108,7 +108,7 @@ const Search = () => {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary" className="h-12 gap-2 min-w-[200px]">
+              <Button variant="ghost" className="h-12 gap-2 min-w-[200px] genre-filter font-semibold">
                 {selectedGenre}
                 <ChevronDown className="h-4 w-4" />
               </Button>
@@ -118,7 +118,7 @@ const Search = () => {
                 <DropdownMenuItem
                   key={genre}
                   onClick={() => setSelectedGenre(genre)}
-                  className={selectedGenre === genre ? "bg-secondary" : ""}
+                  className={selectedGenre === genre ? "genre-filter-item-active" : ""}
                 >
                   {genre}
                 </DropdownMenuItem>

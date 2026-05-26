@@ -342,15 +342,17 @@ const Profile = () => {
     }
   };
 
+  const profileInitial = (username.trim().charAt(0) || "U").toUpperCase();
+
   return (
     <div className="min-h-screen pb-8">
       <section className="container mx-auto px-4 pt-8 pb-6">
         <Card className="p-0 mb-6 overflow-hidden">
-          <div className="relative h-32 bg-gradient-primary group cursor-pointer" onClick={() => bannerInputRef.current?.click()}>
+          <div className="relative h-32 profile-media-banner group cursor-pointer" onClick={() => bannerInputRef.current?.click()}>
             {bannerImage && (
               <img src={bannerImage} alt="Banner" className="w-full h-full object-cover object-center" />
             )}
-            <div className="absolute inset-0 bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 profile-media-overlay opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Camera className="h-8 w-8" />
             </div>
             <input
@@ -365,16 +367,15 @@ const Profile = () => {
           <div className="p-6">
             <div className="flex items-center gap-4 mb-6 -mt-16">
               <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                <Avatar className="h-24 w-24 bg-primary border-4 border-background">
-                  {avatarImage ? (
+                <Avatar className="h-24 w-24 profile-media-avatar border-4 border-background">
+                  {avatarImage && (
                     <AvatarImage src={avatarImage} className="object-cover object-center" />
-                  ) : (
-                    <AvatarFallback className="bg-primary text-primary-foreground text-3xl font-bold">
-                      U
-                    </AvatarFallback>
                   )}
+                  <AvatarFallback className="profile-media-avatar-fallback text-3xl font-bold">
+                    {profileInitial}
+                  </AvatarFallback>
                 </Avatar>
-                <div className="absolute inset-0 rounded-full bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full profile-media-overlay opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <Camera className="h-6 w-6" />
                 </div>
                 <input
@@ -404,12 +405,12 @@ const Profile = () => {
         </Card>
 
         {authType === "guest" && (
-          <Card className="p-6 mb-6 bg-gradient-primary text-primary-foreground">
+          <Card className="p-6 mb-6 banner-surface shadow-glow">
             <div className="flex flex-col items-center gap-3 text-center">
               <Award className="h-8 w-8" />
               <h3 className="text-xl font-bold">Libere todos os livros!</h3>
               <p className="text-sm opacity-90">Faça login e tenha acesso ilimitado a variados recursos</p>
-              <Button variant="secondary" className="mt-2" onClick={() => navigate("/auth")}>
+              <Button variant="secondary" className="mt-2 banner-cta-button" onClick={() => navigate("/auth")}>
                 Fazer Login
               </Button>
             </div>
@@ -417,7 +418,7 @@ const Profile = () => {
         )}
 
         {authType !== "guest" && !isAdmin && (
-          <Card className="p-6 mb-6 bg-gradient-accent text-accent-foreground border-0">
+          <Card className="p-6 mb-6 banner-surface-accent border-0 shadow-glow">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-4">
                 <div className="rounded-full bg-primary/20 p-3">
@@ -431,7 +432,7 @@ const Profile = () => {
                 </div>
               </div>
               <Button 
-                className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="gap-2 banner-cta-button"
                 onClick={() => window.open('https://play.google.com/store', '_blank')}
               >
                 <Download className="h-4 w-4" />
