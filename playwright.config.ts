@@ -11,4 +11,11 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
+  // Inicia e encerra o servidor do frontend automaticamente para os testes E2E
+  webServer: {
+    command: "npm run build --workspace=frontend && cd frontend && npm run preview -- --port 8080 --host 127.0.0.1",
+    url: "http://127.0.0.1:8080",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });

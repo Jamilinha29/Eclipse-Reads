@@ -1,3 +1,4 @@
+/// <reference path="../types-esm.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.84.0'
 
 // @ts-ignore - Suporte para Deno

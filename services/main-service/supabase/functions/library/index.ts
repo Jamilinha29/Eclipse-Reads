@@ -1,3 +1,4 @@
+/// <reference path="../types-esm.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.84.0'
 
 // @ts-ignore - Suporte para Deno
@@ -18,7 +19,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Função handler compatível com Deno e Node.js
 const libraryHandler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -45,15 +45,13 @@ const libraryHandler = async (req: Request): Promise<Response> => {
     if (!user) throw new Error('Não autenticado');
 
     const url = new URL(req.url);
-    const type = url.searchParams.get('type'); // favoritos, lendo, lidos
+    const type = url.searchParams.get('type'); 
 
-    // Mapear tipo para nome da tabela
     let tableName = 'favorites';
     if (type === 'favoritos') tableName = 'favorites';
     else if (type === 'lendo') tableName = 'reading';
     else if (type === 'lidos') tableName = 'read';
 
-    // Buscar IDs dos livros na tabela selecionada
     const { data: bookIds, error: idsError } = await supabaseClient
       .from(tableName)
       .select('book_id')
@@ -70,7 +68,6 @@ const libraryHandler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Buscar dados completos dos livros
     const { data: books, error: booksError } = await supabaseClient
       .from('books')
       .select('*')
@@ -93,7 +90,6 @@ const libraryHandler = async (req: Request): Promise<Response> => {
 };
 
 // Suporte para Deno
-// @ts-ignore
 if (typeof Deno !== 'undefined') {
   // @ts-ignore
   Deno.serve(libraryHandler);

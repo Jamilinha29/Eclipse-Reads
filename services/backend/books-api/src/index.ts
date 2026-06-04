@@ -269,7 +269,6 @@ function verifyFileAccessToken(bookId: string, token: string): boolean {
   }
 }
 
-/** D-02: prefer header over query string (Referer/history leak). */
 function extractFileAccessToken(req: Request): string {
   const header = req.headers["x-file-access"];
   if (typeof header === "string" && header.trim()) return header.trim();
@@ -964,7 +963,6 @@ app.post("/admin/books/import", async (req: Request, res: Response) => {
   }
 });
 
-/** Bucket no Supabase Storage: mensagens em .txt ou .json { "quote", "author?", "category?" } */
 const DAILY_MESSAGES_BUCKET = "mensagem-diaria";
 
 function parseDailyMessageFile(content: string, id: string) {
@@ -980,7 +978,7 @@ function parseDailyMessageFile(content: string, id: string) {
       };
     }
   } catch {
-    /* texto puro */
+
   }
   return { id, quote: trimmed, author: null, category: null };
 }
@@ -1051,7 +1049,7 @@ app.get("/images/books/*", async (req: Request, res: Response) => {
     try {
       rawPath = decodeURIComponent(rawPath);
     } catch {
-      /* keep raw */
+    
     }
     const filePath = sanitizeStoragePath(rawPath);
     if (!filePath) return res.status(400).json({ error: "caminho da imagem inválido" });

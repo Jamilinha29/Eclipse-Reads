@@ -1,6 +1,6 @@
 /**
  * Substitui @supabase/supabase-js nos testes. Sem dependência do Vitest aqui
- * (evita cópias duplicadas do módulo quando o Vite empacota os serviços).
+ * (evita cópias duplicadas de módulo Vite ao empacotar os serviços).
  */
 type CreateFn = (...args: unknown[]) => unknown;
 
